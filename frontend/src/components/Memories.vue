@@ -1,16 +1,31 @@
 <template>
-  <div>
-    <h1>Memories</h1>
+  <div class="flex flex-col">
     <nav>
-      <Button variant="link" to="/trip">Go to Trip Planning</Button>
-      <Button variant="link" to="/finances">Go to Finances</Button>
+      <Button variant="link"><a href="/trip">Go to Trip Planning</a></Button>
+      <Button variant="link"><a href="/finances">Go to Finances</a></Button>
     </nav>
-    <br/>
-    <form @submit.prevent="addJournalEntry">
-      <Input as="textarea" v-model="journalEntry" placeholder="Write your experience..." required />
-      <Button type="submit">Save Entry</Button>
-    </form>
-    <Input type="file" @change="uploadMedia" multiple />
+    <div class="mt-8 flex flex-col gap-4 container px-8 mx-auto">
+      <h1 class="text-4xl font-semibold">Memories</h1>
+      <Card>
+        <CardHeader>
+          <CardTitle>Journal Entry</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form class="w-full gap-4 flex flex-col" @submit.prevent="addJournalEntry">
+            <Input as="textarea" v-model="journalEntry" placeholder="Write your experience..." required />
+            <Button type="submit">Save Entry</Button>
+          </form>
+        </CardContent>
+      </Card>
+      <Card class="mt-4">
+        <CardHeader>
+          <CardTitle>Upload Media</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Input type="file" @change="uploadMedia" multiple />
+        </CardContent>
+      </Card>
+    </div>
   </div>
 </template>
 
@@ -19,9 +34,18 @@ import { ref } from 'vue';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default {
   name: 'Memories',
+  components: {
+    Button,
+    Input,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+  },
   setup() {
     const journalEntry = ref('');
 
