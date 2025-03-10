@@ -1,18 +1,25 @@
 <template>
   <div>
     <h1>Finances</h1>
+    <nav>
+      <Button variant="link" to="/trip">Go to Trip Planning</Button>
+      <Button variant="link" to="/memories">Go to Memories</Button>
+    </nav>
+    <br/>
     <form @submit.prevent="logExpense">
-      <input v-model="expense.description" placeholder="Description" required />
-      <input v-model="expense.amount" type="number" placeholder="Amount" required />
-      <button type="submit">Log Expense</button>
+      <Input v-model="expense.description" placeholder="Description" required />
+      <Input v-model="expense.amount" type="number" placeholder="Amount" required />
+      <Button type="submit">Log Expense</Button>
     </form>
-    <button @click="settleUp">Settle Up</button>
+    <Button @click="settleUp">Settle Up</Button>
   </div>
 </template>
 
 <script>
 import { ref } from 'vue';
 import axios from 'axios';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default {
   name: 'Finances',

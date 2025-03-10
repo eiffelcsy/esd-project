@@ -1,28 +1,41 @@
 <template>
-  <div>
-    <h1>Trip Planning</h1>
-    <form @submit.prevent="createTrip">
-      <input v-model="trip.destination" placeholder="Destination" required />
-      <input v-model="trip.startDate" type="date" required />
-      <input v-model="trip.endDate" type="date" required />
-      <button type="submit">Create Trip</button>
+  <div class="container mx-auto px-8">
+    <h1 class="text-4xl">Trip Planning</h1>
+    <nav>
+      <Button variant="link"><a href="/finances">Go to Finances</a></Button>
+      <Button variant="link"><a href="/memories">Go to Memories</a></Button>
+    </nav>
+    <br/>
+    <div class="mx-auto max-w-xl">
+      <form class="w-full" @submit.prevent="createTrip">
+      <Input v-model="trip.destination" placeholder="Destination" required />
+      <Input v-model="trip.startDate" type="date" required />
+      <Input v-model="trip.endDate" type="date" required />
+      <Button type="submit">Create Trip</Button>
     </form>
+    </div>
     <div v-if="recommendations.length">
       <h2>Itinerary Recommendations</h2>
       <ul>
         <li v-for="item in recommendations" :key="item.id">{{ item.name }}</li>
       </ul>
     </div>
-    <button @click="syncWithGoogleCalendar">Sync with Google Calendar</button>
+    <Button class="w-full" @click="syncWithGoogleCalendar">Sync with Google Calendar</Button>
   </div>
 </template>
 
 <script>
 import { ref } from 'vue';
 import axios from 'axios';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default {
   name: 'TripPlanning',
+  components: {
+    Button,
+    Input
+  },
   setup() {
     const trip = ref({ destination: '', startDate: '', endDate: '' });
     const recommendations = ref([]);

@@ -1,17 +1,24 @@
 <template>
   <div>
     <h1>Memories</h1>
+    <nav>
+      <Button variant="link" to="/trip">Go to Trip Planning</Button>
+      <Button variant="link" to="/finances">Go to Finances</Button>
+    </nav>
+    <br/>
     <form @submit.prevent="addJournalEntry">
-      <textarea v-model="journalEntry" placeholder="Write your experience..." required></textarea>
-      <button type="submit">Save Entry</button>
+      <Input as="textarea" v-model="journalEntry" placeholder="Write your experience..." required />
+      <Button type="submit">Save Entry</Button>
     </form>
-    <input type="file" @change="uploadMedia" multiple />
+    <Input type="file" @change="uploadMedia" multiple />
   </div>
 </template>
 
 <script>
 import { ref } from 'vue';
 import axios from 'axios';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default {
   name: 'Memories',

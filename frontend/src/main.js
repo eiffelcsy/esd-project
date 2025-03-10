@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
 import axios from 'axios';
+import './assets/index.css'
 
 // Set the base URL for Axios
 axios.defaults.baseURL = 'http://localhost:8000';
