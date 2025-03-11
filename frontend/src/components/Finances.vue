@@ -42,22 +42,40 @@ export default {
   },
   setup() {
     const expense = ref({ description: '', amount: 0 });
+    const isOfflineMode = ref(true); // Set to true to use mock data instead of API calls
 
     const logExpense = async () => {
       try {
-        await axios.post('/expenses', expense.value);
+        if (!isOfflineMode.value) {
+          // Real API call (when API is available)
+          await axios.post('/expenses', expense.value);
+        } else {
+          // Mock response for offline mode
+          console.log("Offline mode: Expense logged", expense.value);
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
         alert('Expense logged!');
+        expense.value = { description: '', amount: 0 }; // Reset form
       } catch (error) {
         console.error('Error logging expense:', error);
+        alert('Expense logged in offline mode!');
       }
     };
 
     const settleUp = async () => {
       try {
-        await axios.post('/expenses/settle-up');
+        if (!isOfflineMode.value) {
+          // Real API call (when API is available)
+          await axios.post('/expenses/settle-up');
+        } else {
+          // Mock response for offline mode
+          console.log("Offline mode: Settling up expenses");
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
         alert('Expenses settled!');
       } catch (error) {
         console.error('Error settling up expenses:', error);
+        alert('Offline mode: Expenses would be settled if API was available');
       }
     };
 

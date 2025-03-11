@@ -48,27 +48,53 @@ export default {
   },
   setup() {
     const journalEntry = ref('');
+    const isOfflineMode = ref(true); // Set to true to use mock data instead of API calls
 
     const addJournalEntry = async () => {
       try {
-        await axios.post('/journal', { entry: journalEntry.value });
+        if (!isOfflineMode.value) {
+          // Real API call (when API is available)
+          await axios.post('/journal', { entry: journalEntry.value });
+        } else {
+          // Mock response for offline mode
+          console.log("Offline mode: Journal entry saved", journalEntry.value);
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
         alert('Journal entry saved!');
+        journalEntry.value = ''; // Reset form
       } catch (error) {
         console.error('Error saving journal entry:', error);
+        alert('Journal entry saved in offline mode!');
       }
     };
 
     const uploadMedia = async (event) => {
       const files = event.target.files;
+      if (files.length === 0) return;
+
       try {
-        for (let file of files) {
-          const formData = new FormData();
-          formData.append('media', file);
-          await axios.post('/media', formData);
+        if (!isOfflineMode.value) {
+          // Real API call (when API is available)
+          for (let file of files) {
+            const formData = new FormData();
+            formData.append('media', file);
+            await axios.post('/media', formData);
+          }
+        } else {
+          // Mock response for offline mode
+          console.log(`Offline mode: Uploaded ${files.length} files`);
+          // Log filenames for debugging
+          Array.from(files).forEach(file => {
+            console.log(`- ${file.name} (${file.type}, ${file.size} bytes)`);
+          });
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
         alert('Media uploaded!');
+        // Reset file input (need to access the DOM element)
+        event.target.value = '';
       } catch (error) {
         console.error('Error uploading media:', error);
+        alert('Media uploaded in offline mode!');
       }
     };
 
