@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  # Existing services would be here
+  
+  # Template microservice
+  template:
+    build: 
+      context: ./services/template
+    container_name: template-service
+    ports:
+      - "12345:5001"
+    environment:
+      - DATABASE_URL=sqlite:///template.db
+    volumes:
+      - ./services/template:/app
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
