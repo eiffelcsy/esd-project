@@ -1,7 +1,20 @@
-version: '3.8'
-
 services:
   # Existing services would be here
+  
+  # PostgreSQL database for template service
+  template-db:
+    image: postgres:13
+    container_name: template-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=template_db
+    volumes:
+      - template_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
   
   # Template microservice
   template:
@@ -11,13 +24,18 @@ services:
     ports:
       - "12345:5001"
     environment:
-      - DATABASE_URL=sqlite:///template.db
+      - DATABASE_URL=postgresql://postgres:postgres@template-db:5432/template_db
     volumes:
       - ./services/template:/app
     restart: unless-stopped
+    depends_on:
+      - template-db
     networks:
       - app-network
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  template_postgres_data:
