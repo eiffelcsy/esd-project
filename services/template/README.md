@@ -5,7 +5,7 @@ This is a template microservice that provides CRUD operations via a RESTful API 
 ## Features
 
 - RESTful API with CRUD operations
-- Flask-SQLAlchemy for ORM
+- Flask-SQLAlchemy for ORM with PostgreSQL database
 - Docker containerization
 - Health check endpoint
 
@@ -26,7 +26,7 @@ This is a template microservice that provides CRUD operations via a RESTful API 
 
 ```bash
 docker build -t template-service .
-docker run -p 5000:5000 template-service
+docker run -p 5001:5001 template-service
 ```
 
 ### Using Docker Compose
@@ -55,4 +55,4 @@ python app.py
 
 ## Environment Variables
 
-- `DATABASE_URL`: URL for the database connection (default: sqlite:///template.db) 
+- `DATABASE_URL`: URL for the database connection (default: postgresql://postgres:postgres@template-db:5432/template_db) 
