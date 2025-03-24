@@ -33,9 +33,55 @@ services:
     networks:
       - app-network
 
+  # PostgreSQL database for recommendation service
+  recommendation-db:
+    image: postgres:13
+    container_name: recommendation-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=recommendation_db
+    volumes:
+      - recommendation_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network
+      
+  # Recommendation microservice
+  recommendation:
+    build: 
+      context: ./services/recommendation-management
+    container_name: recommendation-service
+    ports:
+      - "5002:5002"
+    env_file:
+      - ./services/recommendation-management/.env
+    volumes:
+      - ./services/recommendation-management:/app
+    restart: unless-stopped
+    depends_on:
+      - recommendation-db
+      - rabbitmq
+    networks:
+      - app-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
 
 volumes:
   template_postgres_data:
+  recommendation_postgres_data:
+  rabbitmq_data:
