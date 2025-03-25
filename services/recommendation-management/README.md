@@ -5,7 +5,7 @@ This microservice is responsible for generating travel recommendations using the
 ## Features
 
 - Consumes trip data messages from RabbitMQ
-- Generates travel recommendations using OpenAI's GPT-3.5
+- Generates travel recommendations using OpenAI's GPT-4-turbo
 - Stores only trip_id and recommendations in PostgreSQL database for persistence
 - Provides REST API endpoints for recommendation management
 - Publishes recommendation results back to RabbitMQ
