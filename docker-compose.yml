@@ -66,6 +66,38 @@ services:
     networks:
       - app-network
 
+  # PostgreSQL database for group request service
+  grouprequest-db:
+    image: postgres:13
+    container_name: grouprequest-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=grouprequest_db
+    volumes:
+      - grouprequest_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5434:5432"
+    networks:
+      - app-network
+      
+  # Group management microservice
+  group-management:
+    build: 
+      context: ./services/group-management
+    container_name: group-management-service
+    ports:
+      - "5003:5003"
+    env_file:
+      - ./services/group-management/.env
+    volumes:
+      - ./services/group-management:/app
+    restart: unless-stopped
+    depends_on:
+      - grouprequest-db
+    networks:
+      - app-network
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -85,3 +117,4 @@ volumes:
   template_postgres_data:
   recommendation_postgres_data:
   rabbitmq_data:
+  grouprequest_postgres_data:
