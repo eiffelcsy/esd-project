@@ -26,6 +26,10 @@ register_routes(app)
 # Initialize message broker
 message_broker = MessageBroker(app)
 
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({"message": "User Service API. Use /health for health check."}), 200
+
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "healthy", "service": "recommendation-management"}), 200
