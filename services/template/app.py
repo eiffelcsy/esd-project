@@ -17,6 +17,7 @@ db.init_app(app)
 # Register routes
 register_routes(app)
 
+# Add a health check endpoint
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "healthy", "service": "template"}), 200
@@ -26,4 +27,4 @@ with app.app_context():
     db.create_all()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True) 
+    app.run(host='0.0.0.0', port=5001)

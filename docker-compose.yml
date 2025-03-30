@@ -1,6 +1,4 @@
 services:
-  # Existing services would be here
-  
   # PostgreSQL database for template service
   template-db:
     image: postgres:13
@@ -12,10 +10,77 @@ services:
     volumes:
       - template_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5432:5432"
+      - "5439:5432"
+    networks:
+      - app-network
+
+  # Itinerary microservice
+  itinerary:
+    build:
+      context: ./services/itinerary
+    container_name: itinerary-service
+    ports:
+      - "5002:5002"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@itinerary-db:5432/itinerary_db
+    volumes:
+      - ./services/itinerary:/app
+    restart: unless-stopped
+    depends_on:
+      - itinerary-db
+    networks:
+      - app-network
+
+  # PostgreSQL database for itinerary service
+  itinerary-db:
+    image: postgres:13
+    container_name: itinerary-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=itinerary_db
+    volumes:
+      - itinerary_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5437:5432"
     networks:
       - app-network
   
+  # PostgreSQL database for recommendation-management service
+  recommendation-db:
+    image: postgres:13
+    container_name: recommendation-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=recommendation_db
+    volumes:
+      - recommendation_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5438:5432"
+    networks:
+      - app-network
+
+  # Recommendation-management microservice
+  recommendation-management:
+    build:
+      context: ./services/recommendation-management
+    container_name: recommendation-management-service
+    ports:
+      - "5003:5003"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@recommendation-db:5432/recommendation_db
+      - OPENAI_API_KEY=your_openai_api_key
+      - RABBITMQ_HOST=rabbitmq
+    volumes:
+      - ./services/recommendation-management:/app
+    restart: unless-stopped
+    depends_on:
+      - recommendation-db
+      - rabbitmq
+    networks:
+      - app-network
+
   # Template microservice
   template:
     build: 
@@ -33,79 +98,13 @@ services:
     networks:
       - app-network
 
-  # PostgreSQL database for recommendation service
-  recommendation-db:
-    image: postgres:13
-    container_name: recommendation-db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=recommendation_db
-    volumes:
-      - recommendation_postgres_data:/var/lib/postgresql/data/
-    ports:
-      - "5433:5432"
-    networks:
-      - app-network
-      
-  # Recommendation microservice
-  recommendation:
-    build: 
-      context: ./services/recommendation-management
-    container_name: recommendation-service
-    ports:
-      - "5002:5002"
-    env_file:
-      - ./services/recommendation-management/.env
-    volumes:
-      - ./services/recommendation-management:/app
-    restart: unless-stopped
-    depends_on:
-      - recommendation-db
-      - rabbitmq
-    networks:
-      - app-network
-
-  # PostgreSQL database for group request service
-  grouprequest-db:
-    image: postgres:13
-    container_name: grouprequest-db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=grouprequest_db
-    volumes:
-      - grouprequest_postgres_data:/var/lib/postgresql/data/
-    ports:
-      - "5434:5432"
-    networks:
-      - app-network
-      
-  # Group management microservice
-  group-management:
-    build: 
-      context: ./services/group-management
-    container_name: group-management-service
-    ports:
-      - "5003:5003"
-    env_file:
-      - ./services/group-management/.env
-    volumes:
-      - ./services/group-management:/app
-    restart: unless-stopped
-    depends_on:
-      - grouprequest-db
-    networks:
-      - app-network
-
+  # RabbitMQ service
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - "5673:5672"  # Change the external port to 5673
+      - "15673:15672"  # Change the management UI port to 15673
     networks:
       - app-network
 
@@ -118,3 +117,4 @@ volumes:
   recommendation_postgres_data:
   rabbitmq_data:
   grouprequest_postgres_data:
+  itinerary_postgres_data:
