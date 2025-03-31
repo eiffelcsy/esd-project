@@ -1,4 +1,36 @@
 services:
+  # PostgreSQL database for user service
+  user-db:
+    image: postgres:13
+    container_name: user-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=user_db
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5436:5432"
+    networks:
+      - app-network
+
+  # User microservice
+  user:
+    build:
+      context: ./services/user
+    container_name: user-service
+    ports:
+      - "5005:5005"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@user-db:5432/user_db
+    volumes:
+      - ./services/user:/app
+    restart: unless-stopped
+    depends_on:
+      - user-db
+    networks:
+      - app-network
+
   # PostgreSQL database for template service
   template-db:
     image: postgres:13
@@ -153,3 +185,4 @@ volumes:
   rabbitmq_data:
   grouprequest_postgres_data:
   itinerary_postgres_data:
+  user_postgres_data:

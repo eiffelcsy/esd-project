@@ -4,15 +4,20 @@ import os
 import sys
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
 
 # Add more verbose output at startup
 print("=== Starting User Service ===")
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 # Configure the database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:@localhost:3306/user_db'
+database_url = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@user-db:5432/user_db')
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 print("✅ Database configured")
 
@@ -122,8 +127,7 @@ def search_users():
 
 if __name__ == '__main__':
     print("*" * 50)
-    print("Starting User Service on port 5000")
-    print("Try opening: http://127.0.0.1:5000/")
+    print("Starting User Service on port 5005")
+    print("Try opening: http://127.0.0.1:5005/")
     print("*" * 50)
-    # Use the same settings that worked in simple_test.py
-    app.run(host='127.0.0.1', port=5000, debug=True) 
+    app.run(host='0.0.0.0', port=5005, debug=True) 
