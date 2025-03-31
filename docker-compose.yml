@@ -190,6 +190,38 @@ services:
     networks:
       - app-network
 
+  # PostgreSQL database for calendar service
+  calendar-db:
+    image: postgres:13
+    container_name: calendar-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=calendar_db
+    volumes:
+      - calendar_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5437:5432"
+    networks:
+      - app-network
+
+  # Calendar microservice
+  calendar:
+    build:
+      context: ./services/calendar
+    container_name: calendar-service
+    ports:
+      - "5006:5006"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@calendar-db:5432/calendar_db
+    volumes:
+      - ./services/calendar:/app
+    restart: unless-stopped
+    depends_on:
+      - calendar-db
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
@@ -201,3 +233,4 @@ volumes:
   grouprequest_postgres_data:
   itinerary_postgres_data:
   user_postgres_data:
+  calendar_postgres_data:
