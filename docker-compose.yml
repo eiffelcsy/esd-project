@@ -48,7 +48,7 @@ services:
 
   # Template microservice
   template:
-    build:
+    build: 
       context: ./services/template
     container_name: template-service
     ports:
@@ -181,12 +181,80 @@ services:
       context: ./services/expense-management
     container_name: expense-management-service
     ports:
-      - "5005:5005"
+      - "5006:5006"  # Changed from 5005 to avoid conflict with user service
     volumes:
       - ./services/expense-management:/app
     restart: unless-stopped
     depends_on:
       - itinerary
+    networks:
+      - app-network
+    
+    # PostgreSQL database for trip management service
+  trip-db:
+    image: postgres:13
+    container_name: trip-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=trip_db
+    volumes:
+      - trip_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5437:5432"  # Changed to avoid conflict with grouprequest-db
+    networks:
+      - app-network
+
+  # Trip management microservice
+  trip-management:
+    build:
+      context: ./services/trip-management
+    container_name: trip-management-service
+    ports:
+      - "5007:5007"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@trip-db:5432/trip_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - PORT=5001
+    volumes:
+      - ./services/trip-management:/app
+    restart: unless-stopped
+    depends_on:
+      - trip-db
+      - rabbitmq
+      - recommendation-management
+    networks:
+      - app-network
+
+  # PostgreSQL database for calendar service
+  calendar-db:
+    image: postgres:13
+    container_name: calendar-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=calendar_db
+    volumes:
+      - calendar_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5437:5432"
+    networks:
+      - app-network
+
+  # Calendar microservice
+  calendar:
+    build:
+      context: ./services/calendar
+    container_name: calendar-service
+    ports:
+      - "5006:5006"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@calendar-db:5432/calendar_db
+    volumes:
+      - ./services/calendar:/app
+    restart: unless-stopped
+    depends_on:
+      - calendar-db
     networks:
       - app-network
 
@@ -197,7 +265,9 @@ networks:
 volumes:
   template_postgres_data:
   recommendation_postgres_data:
+  trip_postgres_data:
   rabbitmq_data:
   grouprequest_postgres_data:
   itinerary_postgres_data:
   user_postgres_data:
+  calendar_postgres_data:
