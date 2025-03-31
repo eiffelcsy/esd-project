@@ -10,6 +10,9 @@ load_dotenv()
 # Initialize Flask extensions
 db = SQLAlchemy()
 
+# Import message broker
+from app.message_broker import message_broker
+
 def create_app(testing=False):
     # Initialize the Flask application
     app = Flask(__name__)
