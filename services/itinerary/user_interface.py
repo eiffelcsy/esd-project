@@ -8,8 +8,9 @@ app.secret_key = os.urandom(24)  # For session management
 
 # Service endpoints
 TRIP_SERVICE = "http://trip-management:5001"
-ITINERARY_SERVICE = "http://itinerary:5002"
-RECOMMENDATION_SERVICE = "http://recommendation-management:5003"
+RECOMMENDATION_SERVICE = "http://recommendation-management:5002"
+ITINERARY_SERVICE = "http://itinerary:5004"
+EXPENSE_MANAGEMENT_SERVICE = "http://expense-management:5005"
 
 @app.route('/')
 def index():
@@ -155,6 +156,25 @@ def export_calendar(trip_id):
     else:
         error = response.json().get('error', 'Failed to export to calendar')
         return render_template('error.html', message=error), response.status_code
+
+@app.route('/expenses', methods=['POST'])
+def add_expense():
+    """Send expense data to the Expense Management service."""
+    expense_data = request.get_json()
+
+    try:
+        response = requests.post(
+            f"{EXPENSE_MANAGEMENT_SERVICE}/expenses",
+            json=expense_data
+        )
+
+        if response.status_code == 200:
+            return jsonify({"message": "Expense added successfully"}), 200
+        else:
+            return jsonify({"error": "Failed to add expense"}), response.status_code
+
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

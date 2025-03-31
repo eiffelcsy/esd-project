@@ -104,8 +104,8 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672" # Change the external port to 5673
-      - "15672:15672" # Change the management UI port to 15673
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -140,6 +140,21 @@ services:
       - itinerary_postgres_data:/var/lib/postgresql/data/
     ports:
       - "5435:5432"
+    networks:
+      - app-network
+
+  # Expense Management microservice
+  expense-management:
+    build:
+      context: ./services/expense-management
+    container_name: expense-management-service
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./services/expense-management:/app
+    restart: unless-stopped
+    depends_on:
+      - itinerary
     networks:
       - app-network
 

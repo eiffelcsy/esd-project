@@ -164,6 +164,39 @@ def export_to_google_calendar(trip_id):
     return send_file(ics_file, as_attachment=True, download_name=f"itinerary_{trip_id}.ics")
 
 # Scenario 3: Finances
+# Add expense to itinerary
+@app.route('/itinerary/<trip_id>/expenses', methods=['POST'])
+def add_expense_to_itinerary(trip_id):
+    """Add an expense to the itinerary."""
+    expense_data = request.get_json()
+
+    if trip_id not in itineraries:
+        return jsonify({"error": "Itinerary not found"}), 404
+
+    required_fields = ['amount', 'paid_by', 'split_details']
+    missing_fields = [field for field in required_fields if field not in expense_data]
+    if missing_fields:
+        return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+    itinerary = itineraries[trip_id]
+    if 'expenses' not in itinerary:
+        itinerary['expenses'] = []
+
+    itinerary['expenses'].append(expense_data)
+
+    return jsonify({"message": "Expense added successfully"}), 200
+
+# Get all expenses for a trip
+@app.route('/itinerary/<trip_id>/expenses', methods=['GET'])
+def get_expenses_for_itinerary(trip_id):
+    """Retrieve all expenses for a specific trip."""
+    if trip_id not in itineraries:
+        return jsonify({"error": "Itinerary not found"}), 404
+
+    itinerary = itineraries[trip_id]
+    expenses = itinerary.get('expenses', [])
+
+    return jsonify({"expenses": expenses}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5004)
