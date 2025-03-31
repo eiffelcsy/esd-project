@@ -1,6 +1,4 @@
 services:
-  # Existing services would be here
-  
   # PostgreSQL database for template service
   template-db:
     image: postgres:13
@@ -15,10 +13,10 @@ services:
       - "5432:5432"
     networks:
       - app-network
-  
+
   # Template microservice
   template:
-    build: 
+    build:
       context: ./services/template
     container_name: template-service
     ports:
@@ -33,7 +31,7 @@ services:
     networks:
       - app-network
 
-  # PostgreSQL database for recommendation service
+  # PostgreSQL database for recommendation-management service
   recommendation-db:
     image: postgres:13
     container_name: recommendation-db
@@ -47,16 +45,18 @@ services:
       - "5433:5432"
     networks:
       - app-network
-      
-  # Recommendation microservice
-  recommendation:
-    build: 
+
+  # Recommendation-management microservice
+  recommendation-management:
+    build:
       context: ./services/recommendation-management
-    container_name: recommendation-service
+    container_name: recommendation-management-service
     ports:
       - "5002:5002"
-    env_file:
-      - ./services/recommendation-management/.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@recommendation-db:5432/recommendation_db
+      - OPENAI_API_KEY=your_openai_api_key
+      - RABBITMQ_HOST=rabbitmq
     volumes:
       - ./services/recommendation-management:/app
     restart: unless-stopped
@@ -80,10 +80,11 @@ services:
       - "5434:5432"
     networks:
       - app-network
-      
+
   # Group management microservice
+
   group-management:
-    build: 
+    build:
       context: ./services/group-management
     container_name: group-management-service
     ports:
@@ -98,6 +99,7 @@ services:
     networks:
       - app-network
 
+  # RabbitMQ service
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -106,6 +108,53 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+
+  # Itinerary microservice
+  itinerary:
+    build:
+      context: ./services/itinerary
+    container_name: itinerary-service
+    ports:
+      - "5004:5004"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@itinerary-db:5432/itinerary_db
+    volumes:
+      - ./services/itinerary:/app
+    restart: unless-stopped
+    depends_on:
+      - itinerary-db
+    networks:
+      - app-network
+
+  # PostgreSQL database for itinerary service
+  itinerary-db:
+    image: postgres:13
+    container_name: itinerary-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=itinerary_db
+    volumes:
+      - itinerary_postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5435:5432"
+    networks:
+      - app-network
+
+  # Expense Management microservice
+  expense-management:
+    build:
+      context: ./services/expense-management
+    container_name: expense-management-service
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./services/expense-management:/app
+    restart: unless-stopped
+    depends_on:
+      - itinerary
     networks:
       - app-network
 
@@ -118,3 +167,4 @@ volumes:
   recommendation_postgres_data:
   rabbitmq_data:
   grouprequest_postgres_data:
+  itinerary_postgres_data:
