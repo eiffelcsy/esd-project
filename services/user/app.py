@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import sys
+import time
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -40,13 +41,25 @@ class User(db.Model):
 
 print("✅ User model defined")
 
+# Create tables with retry mechanism
+def create_tables_with_retry(max_retries=5, retry_delay=5):
+    for attempt in range(max_retries):
+        try:
+            with app.app_context():
+                db.create_all()
+            print("✅ Database tables created successfully")
+            return True
+        except Exception as e:
+            print(f"❌ Attempt {attempt + 1}/{max_retries} failed to create database tables: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                print("❌ Failed to create database tables after all retries")
+                return False
+
 # Create tables
-try:
-    with app.app_context():
-        db.create_all()
-    print("✅ Database tables created")
-except Exception as e:
-    print(f"❌ Error creating database tables: {e}")
+create_tables_with_retry()
 
 # Root route for basic testing
 @app.route('/')
