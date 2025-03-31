@@ -2,8 +2,17 @@ from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime
 import requests
 from app.models import db, Trip
+import os
+import logging
 
 bp = Blueprint('trips', __name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Get itinerary service URL from environment or use default
+ITINERARY_SERVICE_URL = os.getenv('ITINERARY_SERVICE_URL', 'http://localhost:5004')
 
 @bp.route('/health', methods=['GET'])
 def health_check():
@@ -35,18 +44,17 @@ def create_trip():
         # Skip external service calls in testing environment
         if not current_app.config['TESTING']:
             try:
-                # Create itinerary
-                itinerary_service_url = "http://itinerary:5000/itineraries"
-                itinerary_data = {
-                    "trip_id": trip.id,
-                    "start_date": data['start_date'],
-                    "end_date": data['end_date']
-                }
-                response = requests.post(itinerary_service_url, json=itinerary_data)
+                # Get/Create itinerary
+                itinerary_service_url = f"{ITINERARY_SERVICE_URL}/itinerary/{trip.id}"
+                logger.info(f"Getting/Creating itinerary at: {itinerary_service_url}")
                 
-                if response.status_code == 201:
+                response = requests.get(itinerary_service_url)
+                logger.info(f"Itinerary service response status: {response.status_code}")
+                logger.info(f"Itinerary service response body: {response.text}")
+                
+                if response.status_code == 200:
                     # Update trip with itinerary ID
-                    trip.itinerary_id = response.json()['id']
+                    trip.itinerary_id = trip.id  # Using trip.id as itinerary_id
                     db.session.commit()
 
                     # Send recommendation request via RabbitMQ
@@ -56,9 +64,14 @@ def create_trip():
                     # Rollback if itinerary creation failed
                     db.session.delete(trip)
                     db.session.commit()
-                    return jsonify({"error": "Failed to create itinerary"}), response.status_code
+                    return jsonify({
+                        "error": "Failed to create itinerary",
+                        "status_code": response.status_code,
+                        "response": response.text
+                    }), response.status_code
             except requests.exceptions.RequestException as e:
                 # Handle connection errors to external services
+                logger.error(f"Error connecting to itinerary service: {str(e)}")
                 db.session.delete(trip)
                 db.session.commit()
                 return jsonify({"error": f"External service error: {str(e)}"}), 503
@@ -66,6 +79,7 @@ def create_trip():
         return jsonify(trip.to_dict()), 201
 
     except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
@@ -89,9 +103,34 @@ def update_trip_itinerary(trip_id):
     data = request.json
     
     # Update itinerary in the itinerary service
-    itinerary_service_url = f"http://itinerary:5000/itineraries/{trip.itinerary_id}"
+    itinerary_service_url = f"{ITINERARY_SERVICE_URL}/itinerary/{trip_id}/activities"
     response = requests.put(itinerary_service_url, json=data)
     
     if response.status_code == 200:
         return jsonify({"message": "Itinerary updated successfully"}), 200
-    return jsonify({"error": "Failed to update itinerary"}), response.status_code 
+    return jsonify({"error": "Failed to update itinerary"}), response.status_code
+
+@bp.route('/trips/<int:trip_id>', methods=['DELETE'])
+def delete_trip(trip_id):
+    try:
+        trip = Trip.query.get_or_404(trip_id)
+        
+        # Skip external service calls in testing environment
+        if not current_app.config['TESTING']:
+            try:
+                # Delete itinerary
+                itinerary_service_url = f"{ITINERARY_SERVICE_URL}/itinerary/{trip_id}"
+                requests.delete(itinerary_service_url)
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error connecting to itinerary service: {str(e)}")
+                # Continue with trip deletion even if itinerary deletion fails
+        
+        # Delete trip from database
+        db.session.delete(trip)
+        db.session.commit()
+        
+        return jsonify({"message": "Trip deleted successfully"}), 200
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500 

@@ -4,8 +4,12 @@ import json
 from datetime import datetime
 from icalendar import Calendar, Event
 import io
+import os
 
 app = Flask(__name__)
+
+# Configure trip-management service URL from environment
+TRIP_MANAGEMENT_URL = os.getenv('TRIP_MANAGEMENT_URL', 'http://trip-management:5007')
 
 # In-memory storage for itineraries
 itineraries = {}
@@ -18,37 +22,39 @@ def health_check():
 # Scenario 2: Planning
 @app.route('/itinerary/<trip_id>', methods=['GET'])
 def get_itinerary(trip_id):
-    response = requests.get(f"http://trip-management:5001/trips/{trip_id}")
-    
-    if response.status_code != 200:
-        return jsonify({"error": "Trip not found"}), 404
-    
-    trip_data = response.json()
-    
-    # Organise activities by date
-    activities_by_date = {}
-    for activity in trip_data['activities']:
-        date = activity['date']
-        if date not in activities_by_date:
-            activities_by_date[date] = []
-        activities_by_date[date].append(activity)
-    
-    # Activities organised by date, now organise by time
-    for date in activities_by_date:
-        activities_by_date[date] = sorted(activities_by_date[date], key=lambda x: x['time'])
-    
-    itinerary = {
-        "tripId": trip_id,
-        "destination": trip_data['destination'],
-        "startDate": trip_data['startDate'],
-        "endDate": trip_data['endDate'],
-        "dailyActivities": activities_by_date
-    }
-    
-    # Store the itinerary
-    itineraries[trip_id] = itinerary
-    
-    return jsonify(itinerary), 200
+    try:
+        # Check if we already have this itinerary with activities
+        if trip_id in itineraries and itineraries[trip_id].get('dailyActivities'):
+            return jsonify(itineraries[trip_id]), 200
+
+        # If not, get trip data and create new itinerary
+        response = requests.get(f"{TRIP_MANAGEMENT_URL}/trips/{trip_id}")
+        
+        if response.status_code != 200:
+            return jsonify({"error": "Trip not found"}), 404
+        
+        trip_data = response.json()
+        
+        # Create new itinerary or update existing one
+        itinerary = itineraries.get(trip_id, {})
+        itinerary.update({
+            "tripId": trip_id,
+            "destination": trip_data['city'],
+            "startDate": trip_data['start_date'],
+            "endDate": trip_data['end_date'],
+        })
+        
+        # Preserve existing activities or initialize empty dict
+        if 'dailyActivities' not in itinerary:
+            itinerary['dailyActivities'] = {}
+        
+        # Store/update the itinerary
+        itineraries[trip_id] = itinerary
+        
+        return jsonify(itinerary), 200
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error connecting to trip-management service: {str(e)}")
+        return jsonify({"error": "Failed to connect to trip-management service"}), 503
 
 # Add activity to itinerary
 @app.route('/itinerary/<trip_id>/activities', methods=['PUT'])
@@ -79,6 +85,39 @@ def add_activity(trip_id):
     itinerary['dailyActivities'][date].append(activity_data)
     
     return jsonify({"message": "Activity added successfully"}), 200
+
+# Delete activity from itinerary
+@app.route('/itinerary/<trip_id>/activities', methods=['DELETE'])
+def delete_activity(trip_id):
+    """Delete an activity from the itinerary."""
+    activity_data = request.get_json()
+    
+    if trip_id not in itineraries:
+        return jsonify({"error": "Itinerary not found"}), 404
+    
+    required_fields = ['date', 'time', 'name']
+    missing_fields = [field for field in required_fields if field not in activity_data]
+    if missing_fields:
+        return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+    
+    itinerary = itineraries[trip_id]
+    date = activity_data['date']
+    
+    if date not in itinerary['dailyActivities']:
+        return jsonify({"error": "No activities found for this date"}), 404
+    
+    # Find and remove the activity
+    activities = itinerary['dailyActivities'][date]
+    for i, activity in enumerate(activities):
+        if (activity['time'] == activity_data['time'] and 
+            activity['name'] == activity_data['name']):
+            del activities[i]
+            # Remove the date if no more activities
+            if not activities:
+                del itinerary['dailyActivities'][date]
+            return jsonify({"message": "Activity deleted successfully"}), 200
+    
+    return jsonify({"error": "Activity not found"}), 404
 
 # Exporting acitvities to Google Calendar
 @app.route('/itinerary/<trip_id>/export', methods=['POST'])
@@ -197,6 +236,16 @@ def get_expenses_for_itinerary(trip_id):
     expenses = itinerary.get('expenses', [])
 
     return jsonify({"expenses": expenses}), 200
+
+# Delete itinerary
+@app.route('/itinerary/<trip_id>', methods=['DELETE'])
+def delete_itinerary(trip_id):
+    """Delete an itinerary."""
+    if trip_id not in itineraries:
+        return jsonify({"error": "Itinerary not found"}), 404
+    
+    del itineraries[trip_id]
+    return jsonify({"message": "Itinerary deleted successfully"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5004)
