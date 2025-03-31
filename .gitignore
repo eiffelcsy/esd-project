@@ -2,3 +2,4 @@
 *.env.test
 services/*/venv/
 services/*/.venv/
+./vscode
