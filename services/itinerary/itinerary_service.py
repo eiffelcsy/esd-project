@@ -166,4 +166,4 @@ def export_to_google_calendar(trip_id):
 # Scenario 3: Finances
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002)
+    app.run(host='0.0.0.0', port=5004)
