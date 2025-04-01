@@ -14,7 +14,10 @@ app = Flask(__name__)
 CORS(app)
 
 # Configure the database
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@db:5432/recommendation_db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL',
+    'postgresql://postgres:postgres@recommendation-db:5432/recommendation_db'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize the database
@@ -25,6 +28,10 @@ register_routes(app)
 
 # Initialize message broker
 message_broker = MessageBroker(app)
+
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({"message": "User Service API. Use /health for health check."}), 200
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -39,4 +46,4 @@ with app.app_context():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))
-    app.run(host='0.0.0.0', port=port, debug=True) 
+    app.run(host='0.0.0.0', port=port, debug=True)

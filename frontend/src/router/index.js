@@ -9,7 +9,7 @@ import AuthPage from '../components/AuthPage.vue';
 const routes = [
   { path: '/login', component: AuthPage },
   { path: '/', redirect: '/groups' },
-  { path: '/groups', component: GroupManagement },
+  { path: '/groups', component: GroupManagement, name: 'group-management' },
   { 
     path: '/groups/:groupId/trip-ideation', 
     component: TripIdeation,

@@ -1,31 +1,13 @@
-from flask import Flask
-from flask_cors import CORS
-import os
-from dotenv import load_dotenv
-from app.models import db
-from app.routes import register_routes
+from app import create_app, db
 from app.rabbitmq_config import MessageBroker
 import threading
+import os
 
-# Load environment variables
-load_dotenv()
-
-# Initialize the Flask application
-app = Flask(__name__)
-CORS(app)
-
-# Configure the database
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@db:5432/trip_db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Initialize the database
-db.init_app(app)
+# Create the Flask application
+app = create_app()
 
 # Initialize message broker
 message_broker = MessageBroker(app)
-
-# Register routes
-register_routes(app, message_broker)
 
 def start_message_consumer():
     with app.app_context():
