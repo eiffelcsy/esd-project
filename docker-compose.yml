@@ -52,7 +52,7 @@ services:
       context: ./services/template
     container_name: template-service
     ports:
-      - "12345:5001"
+      - "5001:5001"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@template-db:5432/template_db
     volumes:
@@ -249,7 +249,7 @@ services:
       context: ./services/calendar
     container_name: calendar-service
     ports:
-      - "5008:5006"
+      - "5008:5008"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@calendar-db:5432/calendar_db
     volumes:
@@ -262,7 +262,7 @@ services:
 
   # Postgres database used by Kong
   kong-db:
-    image: postgres:17.4
+    image: postgres:13
     platform: linux/amd64  # <- required for Mac M1 chip. Otherwise, can remove
     restart: always
     networks:
@@ -321,6 +321,22 @@ services:
       - "8000:8000"  # Proxy
       - "8001:8001"  # Admin API
       - "8002:8002"  # Kong Manager
+
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend-service
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    restart: unless-stopped
+    networks:
+      - app-network
 
 networks:
   app-network:

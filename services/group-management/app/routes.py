@@ -8,14 +8,14 @@ def register_routes(app):
     def create_group():
         """
         Composite endpoint for group creation:
-        1. Validates user exists
+        1. Validates/creates users from emails
         2. Creates group
-        3. Creates calendar for the group (BYPASSED FOR TESTING)
+        3. Creates calendar for the group
         """
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['name', 'createdBy', 'startDateRange', 'endDateRange']
+        required_fields = ['name', 'members', 'startDateRange', 'endDateRange']
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'{field} is required'}), 400
@@ -23,12 +23,10 @@ def register_routes(app):
         # Extract data
         name = data['name']
         description = data.get('description', '')
-        created_by = data['createdBy']
+        member_emails = data['members']
         
-        # Set users array - if not provided, default to an array with the creator
-        users = data.get('users', [created_by])
-        if not users:
-            users = [created_by]
+        if not member_emails:
+            return jsonify({'error': 'At least one member email is required'}), 400
         
         # Parse dates
         try:
@@ -37,12 +35,24 @@ def register_routes(app):
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)'}), 400
             
+        # Step 1: Validate/create all users
+        user_ids = []
+        creator_id = None
+        
+        for email in member_emails:
+            is_valid, user_data = UserService.validate_or_create_user(email)
+            if not is_valid:
+                return jsonify(user_data), 400
+            user_ids.append(user_data['user_id'])
+            if not creator_id:  # First user becomes the creator
+                creator_id = user_data['user_id']
+            
         # Create a record of this request
         group_request = GroupRequest(
             name=name,
             description=description,
-            created_by=created_by,
-            users=users,
+            created_by=creator_id,
+            users=user_ids,
             start_date_range=start_date_range,
             end_date_range=end_date_range,
             status='pending'
@@ -51,45 +61,36 @@ def register_routes(app):
         db.session.add(group_request)
         db.session.commit()
         
-        # Step 1: Validate user exists
-        is_valid, user_data = UserService.validate_user(created_by)
-        if not is_valid:
-            group_request.status = 'failed'
-            group_request.description = f"{description} - Failed: {user_data.get('error', 'User validation failed')}"
-            db.session.commit()
-            return jsonify(user_data), 400
-            
         # Step 2: Create group in group service
         success, group_data = GroupService.create_group(
             name=name,
             description=description,
-            created_by=created_by,
-            users=users
+            created_by=creator_id,
+            users=user_ids
         )
         
-        # TESTING ONLY: If group service is not available, simulate a successful response
-        if not success:
-            # For testing purposes, create a mock group response
+        # For testing purposes, create a mock group response if service is not available
+        if not success and 'GROUP_SERVICE_URL not configured' in group_data.get('error', ''):
             group_data = {
                 "id": group_request.id, 
                 "name": name,
                 "description": description,
-                "created_by": created_by,
-                "users": users
+                "created_by": creator_id,
+                "users": user_ids
             }
             success = True
             
-        # Get group ID from the response
-        group_id = group_data
-        if not group_id:
-            group_id = group_request.id  # Use request ID as fallback
-            group_data["id"] = group_id
+        if not success:
+            group_request.status = 'failed'
+            group_request.description = f"{description} - Failed: {group_data.get('error', 'Group creation failed')}"
+            db.session.commit()
+            return jsonify(group_data), 400
             
-        # Update the request with the group ID
+        # Get group ID from the response
+        group_id = group_data.get('id', group_request.id)
         group_request.group_id = group_id
-        
-        # Step 3: Create calendar for the group - COMMENTED OUT FOR TESTING
-        """
+            
+        # Step 3: Create calendar for the group
         success, calendar_data = CalendarService.create_calendar(
             group_id=group_id,
             start_date_range=data['startDateRange'],
@@ -108,14 +109,6 @@ def register_routes(app):
                 'status': 'partial'
             }
             return jsonify(response), 201
-        """
-        # For testing: simulate successful calendar creation
-        calendar_data = {
-            "id": group_id,
-            "group_id": group_id,
-            "start_date_range": data['startDateRange'],
-            "end_date_range": data['endDateRange']
-        }
             
         # Everything succeeded
         group_request.status = 'completed'

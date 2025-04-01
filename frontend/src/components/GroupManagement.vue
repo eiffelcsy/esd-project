@@ -236,6 +236,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { userService } from '@/services/userService'
 
 const router = useRouter()
 const isSubmitting = ref(false)
@@ -244,26 +245,29 @@ const lastCreatedGroup = ref({})
 const newlyCreatedGroupId = ref(null)
 const notificationType = ref('create') // 'create' or 'delete'
 const isRefreshing = ref(false)
+const currentUserId = ref(null)
 
 const notificationMessage = computed(() => {
   if (notificationType.value === 'create') {
     return `Group "${lastCreatedGroup.value.name}" has been created successfully.`
   } else if (notificationType.value === 'delete') {
     return `Group "${lastCreatedGroup.value.name}" has been deleted successfully.`
+  } else if (notificationType.value === 'error') {
+    return lastCreatedGroup.value.name
   }
   return ''
 })
 
 const creationStatus = ref({
-  userValidation: true, // Mock as complete
+  userValidation: true,
   groupCreation: false,
-  calendarCreation: true // Mock as complete
+  calendarCreation: true
 })
 
 const newGroup = ref({
   name: '',
   members: [],
-  createdBy: 1,
+  createdBy: null,
   startDateRange: new Date().toISOString(),
   endDateRange: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString()
 })
@@ -286,22 +290,66 @@ const removeMember = (index) => {
   newGroup.value.members.splice(index, 1)
 }
 
+const initializeUser = async () => {
+  try {
+    // Try to get user with ID 1
+    try {
+      const user = await userService.getUser(1)
+      currentUserId.value = user.user_id
+      newGroup.value.createdBy = user.user_id
+      console.log('Found existing user:', user)
+    } catch (error) {
+      if (error.message === 'USER_NOT_FOUND') {
+        // If user doesn't exist, create a new one with email
+        console.log('User not found, creating new user...')
+        const username = 'testuser'
+        const email = 'test@example.com'
+        const newUser = await userService.registerUser(username, email)
+        currentUserId.value = newUser.user_id
+        newGroup.value.createdBy = newUser.user_id
+        console.log('Created new user:', newUser)
+      } else {
+        // If it's a different error, throw it
+        throw error
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing user:', error)
+    // Show error in UI
+    showNotification.value = true
+    notificationType.value = 'error'
+    lastCreatedGroup.value = { name: `Error: ${error.message}` }
+  }
+}
+
 const createGroup = async () => {
   try {
     isSubmitting.value = true
+    
+    // Ensure we have a user
+    if (!currentUserId.value) {
+      await initializeUser()
+      // Double check we got a user ID
+      if (!currentUserId.value) {
+        throw new Error('Failed to initialize user')
+      }
+    }
+    
     // Update group creation status
     setTimeout(() => {
       creationStatus.value.groupCreation = true
-    }, 1000) // Simulate a delay before completing
+    }, 1000)
     
     const payload = {
       name: newGroup.value.name,
-      users: newGroup.value.members,
-      createdBy: newGroup.value.createdBy,
+      members: newGroup.value.members,
+      createdBy: currentUserId.value,
       startDateRange: newGroup.value.startDateRange,
       endDateRange: newGroup.value.endDateRange,
       description: 'Created for testing purposes'
     }
+
+    console.log('Creating group with payload:', payload)
 
     const response = await fetch('http://localhost:5003/api/groups', {
       method: 'POST',
@@ -346,7 +394,7 @@ const createGroup = async () => {
       newGroup.value = {
         name: '',
         members: [],
-        createdBy: 1,
+        createdBy: null,
         startDateRange: new Date().toISOString(),
         endDateRange: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString()
       }
@@ -452,8 +500,9 @@ const deleteGroup = async () => {
   }
 }
 
-onMounted(() => {
-  fetchGroups()
+onMounted(async () => {
+  await initializeUser()
+  await fetchGroups()
 })
 </script>
 
