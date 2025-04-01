@@ -1,2 +1,9 @@
 *.env
 *.env.test
+services/*/venv/
+services/*/.venv/
+.vscode/
+# Python compiled files
+*.pyc
+__pycache__/
+*.py[cod]

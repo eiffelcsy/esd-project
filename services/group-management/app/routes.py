@@ -8,7 +8,7 @@ def register_routes(app):
     def create_group():
         """
         Composite endpoint for group creation:
-        1. Validates user exists (BYPASSED FOR TESTING)
+        1. Validates user exists
         2. Creates group
         3. Creates calendar for the group (BYPASSED FOR TESTING)
         """
@@ -51,17 +51,13 @@ def register_routes(app):
         db.session.add(group_request)
         db.session.commit()
         
-        # Step 1: Validate user exists - COMMENTED OUT FOR TESTING
-        """
+        # Step 1: Validate user exists
         is_valid, user_data = UserService.validate_user(created_by)
         if not is_valid:
             group_request.status = 'failed'
             group_request.description = f"{description} - Failed: {user_data.get('error', 'User validation failed')}"
             db.session.commit()
             return jsonify(user_data), 400
-        """
-        # For testing: assume user is valid
-        user_data = {"id": created_by, "name": f"Test User {created_by}", "email": f"user{created_by}@example.com"}
             
         # Step 2: Create group in group service
         success, group_data = GroupService.create_group(

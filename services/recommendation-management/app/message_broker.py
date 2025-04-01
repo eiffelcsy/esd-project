@@ -11,6 +11,12 @@ from app.models import db, Recommendation
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def connect_to_rabbitmq():
+    rabbitmq_host = os.getenv('RABBITMQ_HOST', 'localhost')  # Default to localhost if not set
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=rabbitmq_host))
+    channel = connection.channel()
+    return connection, channel
+
 class MessageBroker:
     def __init__(self, app=None):
         self.app = app
@@ -254,4 +260,4 @@ class MessageBroker:
         self.should_reconnect = False
         self.safe_channel_close()
         self.safe_connection_close()
-        logger.info("Closed connection to RabbitMQ") 
+        logger.info("Closed connection to RabbitMQ")
