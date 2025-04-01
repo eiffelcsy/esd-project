@@ -4,7 +4,6 @@ import os
 import sys
 import time
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 # Add more verbose output at startup
@@ -30,14 +29,11 @@ print("✅ SQLAlchemy initialized")
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     
-    def __init__(self, username, password):
+    def __init__(self, username, email):
         self.username = username
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        self.email = email
 
 print("✅ User model defined")
 
@@ -76,17 +72,21 @@ def health_check():
 def register():
     data = request.get_json()
     
-    if not data or 'username' not in data or 'password' not in data:
-        return jsonify({'error': 'Username and password are required'}), 400
+    if not data or 'username' not in data or 'email' not in data:
+        return jsonify({'error': 'Username and email are required'}), 400
     
     # Check if username already exists
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'error': 'Username already taken'}), 400
+        
+    # Check if email already exists
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already registered'}), 400
     
     # Create new user
     new_user = User(
         username=data['username'],
-        password=data['password']
+        email=data['email']
     )
     
     db.session.add(new_user)
@@ -95,29 +95,9 @@ def register():
     return jsonify({
         'message': 'User registered successfully',
         'user_id': new_user.id,
-        'username': new_user.username
+        'username': new_user.username,
+        'email': new_user.email
     }), 201
-
-# Login
-@app.route('/api/users/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    
-    if not data or 'username' not in data or 'password' not in data:
-        return jsonify({'error': 'Username and password are required'}), 400
-    
-    # Find user by username
-    user = User.query.filter_by(username=data['username']).first()
-    
-    # Check if user exists and password is correct
-    if not user or not user.check_password(data['password']):
-        return jsonify({'error': 'Invalid username or password'}), 401
-    
-    return jsonify({
-        'message': 'Login successful',
-        'user_id': user.id,
-        'username': user.username
-    }), 200
 
 # Get user
 @app.route('/api/users/<int:user_id>')
@@ -125,7 +105,8 @@ def get_user(user_id):
     user = User.query.get_or_404(user_id)
     return jsonify({
         'user_id': user.id,
-        'username': user.username
+        'username': user.username,
+        'email': user.email
     }), 200
 
 # Search users
@@ -135,7 +116,8 @@ def search_users():
     users = User.query.filter(User.username.like(f'%{query}%')).all()
     return jsonify([{
         'user_id': user.id,
-        'username': user.username
+        'username': user.username,
+        'email': user.email
     } for user in users]), 200
 
 if __name__ == '__main__':

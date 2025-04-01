@@ -9,7 +9,7 @@ def register_routes(app):
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['username', 'email', 'password']
+        required_fields = ['username', 'email']
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'{field} is required'}), 400
@@ -21,11 +21,10 @@ def register_routes(app):
         if User.query.filter_by(email=data['email']).first():
             return jsonify({'error': 'Email already registered'}), 400
         
-        # Create new user
+        # Create new user without password
         new_user = User(
             username=data['username'],
             email=data['email'],
-            password=data['password'],
             first_name=data.get('first_name'),
             last_name=data.get('last_name'),
             profile_picture=data.get('profile_picture')
