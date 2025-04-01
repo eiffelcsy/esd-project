@@ -1,0 +1,12 @@
+services:
+  finance_service:
+    env_file:
+      - .env
+    build: .
+    ports:
+      - "5006:5006"
+    environment:
+      - DB_URL=mysql+mysqlconnector://is213@host.docker.internal:3306/expenses
+      - AMQP_URL=amqp://guest:guest@rabbitmq:5672/
+      - EXCHANGE_RATE_API_KEY=${EXCHANGE_RATE_API_KEY}
+      - EXCHANGE_RATE_BASE_URL=${EXCHANGE_RATE_BASE_URL}
