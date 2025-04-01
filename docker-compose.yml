@@ -136,12 +136,17 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5673:5672"
+      - "15673:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # Itinerary microservice
   itinerary:
@@ -252,11 +257,15 @@ services:
       - "5008:5008"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@calendar-db:5432/calendar_db
+      - RABBITMQ_HOST=rabbitmq
     volumes:
       - ./services/calendar:/app
     restart: unless-stopped
     depends_on:
-      - calendar-db
+      rabbitmq:
+        condition: service_healthy
+      calendar-db:
+        condition: service_started
     networks:
       - app-network
 

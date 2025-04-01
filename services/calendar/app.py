@@ -38,6 +38,25 @@ class Calendar(db.Model):
             'updated_at': self.updated_at.isoformat()
         }
 
+# User Availability model
+class UserAvailability(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    calendar_id = db.Column(db.Integer, db.ForeignKey('calendar.id'), nullable=False)
+    user_id = db.Column(db.Integer, nullable=False)
+    available_dates = db.Column(db.JSON, nullable=False)  # Store dates as ISO strings in an array
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'calendar_id': self.calendar_id,
+            'user_id': self.user_id,
+            'available_dates': self.available_dates,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
+
 # Create tables
 with app.app_context():
     db.create_all()
@@ -82,20 +101,33 @@ def create_calendar():
 
 @app.route('/api/calendars/group/<int:group_id>', methods=['GET'])
 def get_group_calendar(group_id):
-    """Get calendar for a specific group"""
+    """Get calendar and all user availabilities for a specific group"""
     calendar = Calendar.query.filter_by(group_id=group_id).first()
     if not calendar:
         return jsonify({'error': 'Calendar not found'}), 404
-    return jsonify(calendar.to_dict()), 200
+
+    # Get all user availabilities for this calendar
+    availabilities = UserAvailability.query.filter_by(calendar_id=calendar.id).all()
+    
+    response = {
+        **calendar.to_dict(),
+        'user_availabilities': [avail.to_dict() for avail in availabilities]
+    }
+    
+    return jsonify(response), 200
 
 @app.route('/api/calendars/group/<int:group_id>', methods=['DELETE'])
 def delete_group_calendar(group_id):
-    """Delete calendar for a specific group"""
+    """Delete calendar and all associated user availabilities for a specific group"""
     calendar = Calendar.query.filter_by(group_id=group_id).first()
     if not calendar:
         return jsonify({'error': 'Calendar not found'}), 404
     
     try:
+        # Delete associated user availabilities first
+        UserAvailability.query.filter_by(calendar_id=calendar.id).delete()
+        
+        # Delete the calendar
         db.session.delete(calendar)
         db.session.commit()
         return jsonify({'message': f'Calendar for group {group_id} deleted successfully'}), 200
@@ -103,6 +135,52 @@ def delete_group_calendar(group_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/calendars/<int:calendar_id>/availability', methods=['GET'])
+def get_calendar_availability(calendar_id):
+    """Get all user availabilities for a specific calendar"""
+    calendar = Calendar.query.get_or_404(calendar_id)
+    availabilities = UserAvailability.query.filter_by(calendar_id=calendar_id).all()
+    
+    return jsonify({
+        'calendar': calendar.to_dict(),
+        'availabilities': [avail.to_dict() for avail in availabilities]
+    }), 200
+
+@app.route('/api/calendars/<int:calendar_id>/availability', methods=['POST'])
+def update_calendar_availability(calendar_id):
+    """Update user availability for a specific calendar"""
+    data = request.get_json()
+    
+    # Validate required fields
+    required_fields = ['user_id', 'available_dates']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'{field} is required'}), 400
+    
+    try:
+        # Update or create user availability
+        availability = UserAvailability.query.filter_by(
+            calendar_id=calendar_id,
+            user_id=data['user_id']
+        ).first()
+
+        if availability:
+            availability.available_dates = data['available_dates']
+        else:
+            availability = UserAvailability(
+                calendar_id=calendar_id,
+                user_id=data['user_id'],
+                available_dates=data['available_dates']
+            )
+            db.session.add(availability)
+
+        db.session.commit()
+        return jsonify(availability.to_dict()), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5006))
-    app.run(host='0.0.0.0', port=port, debug=True) 
+    app.run(host='0.0.0.0', port=port) 
