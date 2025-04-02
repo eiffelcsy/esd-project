@@ -1,0 +1,64 @@
+2025-04-01 06:55:50,911 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-01 06:55:50,918 INFO supervisord started with pid 1
+2025-04-01 06:55:51,920 INFO spawned: 'flask' with pid 7
+2025-04-01 06:55:51,921 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-01 06:55:53,134 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-01 06:55:53,134 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:19:23,728 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-02 03:19:23,734 INFO supervisord started with pid 1
+2025-04-02 03:19:24,736 INFO spawned: 'flask' with pid 7
+2025-04-02 03:19:24,737 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-02 03:19:25,107 WARN exited: flask (exit status 1; not expected)
+2025-04-02 03:19:25,123 WARN exited: rabbitmq_consumer (exit status 1; not expected)
+2025-04-02 03:19:26,125 INFO spawned: 'flask' with pid 9
+2025-04-02 03:19:26,126 INFO spawned: 'rabbitmq_consumer' with pid 10
+2025-04-02 03:19:26,369 WARN exited: rabbitmq_consumer (exit status 1; not expected)
+2025-04-02 03:19:26,374 WARN exited: flask (exit status 1; not expected)
+2025-04-02 03:19:28,377 INFO spawned: 'flask' with pid 11
+2025-04-02 03:19:28,378 INFO spawned: 'rabbitmq_consumer' with pid 12
+2025-04-02 03:19:28,593 WARN exited: flask (exit status 1; not expected)
+2025-04-02 03:19:28,597 WARN exited: rabbitmq_consumer (exit status 1; not expected)
+2025-04-02 03:19:31,609 INFO spawned: 'flask' with pid 13
+2025-04-02 03:19:31,611 INFO spawned: 'rabbitmq_consumer' with pid 14
+2025-04-02 03:19:32,884 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:19:32,884 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:26:02,866 WARN received SIGTERM indicating exit request
+2025-04-02 03:26:02,867 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-02 03:26:02,869 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-02 03:26:02,870 WARN stopped: flask (terminated by SIGTERM)
+2025-04-02 03:26:33,629 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-02 03:26:33,629 INFO supervisord started with pid 1
+2025-04-02 03:26:34,631 INFO spawned: 'flask' with pid 7
+2025-04-02 03:26:34,632 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-02 03:26:35,829 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:26:35,830 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:27:58,028 WARN received SIGTERM indicating exit request
+2025-04-02 03:27:58,031 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-02 03:27:58,032 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-02 03:27:58,034 WARN stopped: flask (terminated by SIGTERM)
+2025-04-02 03:27:59,079 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-02 03:27:59,086 INFO supervisord started with pid 1
+2025-04-02 03:28:00,088 INFO spawned: 'flask' with pid 7
+2025-04-02 03:28:00,089 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-02 03:28:01,329 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:28:01,329 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:42:49,249 WARN received SIGTERM indicating exit request
+2025-04-02 03:42:49,250 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-02 03:42:49,253 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-02 03:42:49,256 WARN stopped: flask (terminated by SIGTERM)
+2025-04-02 03:43:36,095 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-02 03:43:36,098 INFO supervisord started with pid 1
+2025-04-02 03:43:37,100 INFO spawned: 'flask' with pid 7
+2025-04-02 03:43:37,101 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-02 03:43:38,349 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:43:38,350 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:45:18,593 WARN received SIGTERM indicating exit request
+2025-04-02 03:45:18,596 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-02 03:45:18,605 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-02 03:45:18,610 WARN stopped: flask (terminated by SIGTERM)
+2025-04-02 03:47:11,336 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-02 03:47:11,339 INFO supervisord started with pid 1
+2025-04-02 03:47:12,345 INFO spawned: 'flask' with pid 7
+2025-04-02 03:47:12,347 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-02 03:47:13,545 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-02 03:47:13,545 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)

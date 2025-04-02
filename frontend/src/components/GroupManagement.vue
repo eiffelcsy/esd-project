@@ -303,7 +303,7 @@ const createGroup = async () => {
       description: 'Created for testing purposes'
     }
 
-    const response = await fetch('http://localhost:5003/api/groups', {
+    const response = await fetch('http://localhost:5004/api/groups', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -373,7 +373,7 @@ const createGroup = async () => {
 const fetchGroups = async () => {
   try {
     isRefreshing.value = true
-    const response = await fetch('http://localhost:5003/api/groups/requests')
+    const response = await fetch('http://localhost:5004/api/groups/requests')
     if (response.ok) {
       const data = await response.json()
       groups.value = data.map(item => ({
@@ -411,7 +411,7 @@ const deleteGroup = async () => {
     isDeletingGroup.value = true
     deleteError.value = ''
     
-    const response = await fetch(`http://localhost:5003/api/groups/${groupToDelete.value.id}`, {
+    const response = await fetch(`http://localhost:5004/api/groups/${groupToDelete.value.id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'

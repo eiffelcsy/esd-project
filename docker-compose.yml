@@ -10,7 +10,7 @@ services:
     volumes:
       - user_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5436:5432"
+      - "5432:5432"
     networks:
       - app-network
 
@@ -20,7 +20,7 @@ services:
       context: ./services/user
     container_name: user-service
     ports:
-      - "5005:5005"
+      - "5001:5005"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@user-db:5432/user_db
     volumes:
@@ -42,7 +42,7 @@ services:
     volumes:
       - template_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5432:5432"
+      - "5433:5432"
     networks:
       - app-network
 
@@ -52,7 +52,7 @@ services:
       context: ./services/template
     container_name: template-service
     ports:
-      - "12345:5001"
+      - "5009:5001"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@template-db:5432/template_db
     volumes:
@@ -74,7 +74,7 @@ services:
     volumes:
       - recommendation_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5433:5432"
+      - "5434:5432"
     networks:
       - app-network
 
@@ -84,7 +84,7 @@ services:
       context: ./services/recommendation-management
     container_name: recommendation-management-service
     ports:
-      - "5002:5002"
+      - "5003:5002"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@recommendation-db:5432/recommendation_db
       - OPENAI_API_KEY=your_openai_api_key
@@ -109,7 +109,7 @@ services:
     volumes:
       - grouprequest_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5434:5432"
+      - "5435:5432"
     networks:
       - app-network
 
@@ -120,7 +120,7 @@ services:
       context: ./services/group-management
     container_name: group-management-service
     ports:
-      - "5003:5003"
+      - "5004:5003"
     env_file:
       - ./services/group-management/.env
     volumes:
@@ -136,8 +136,8 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5673:5672"
-      - "15673:15672"
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -154,7 +154,7 @@ services:
       context: ./services/itinerary
     container_name: itinerary-service
     ports:
-      - "5004:5004"
+      - "5005:5004"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@itinerary-db:5432/itinerary_db
       - TRIP_MANAGEMENT_URL=http://trip-management:5007
@@ -177,7 +177,7 @@ services:
     volumes:
       - itinerary_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5435:5432"
+      - "5436:5432"
     networks:
       - app-network
 
@@ -207,7 +207,7 @@ services:
     volumes:
       - trip_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5439:5432"
+      - "5437:5432"
     networks:
       - app-network
 
@@ -244,7 +244,7 @@ services:
     volumes:
       - calendar_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5437:5432"
+      - "5438:5432"
     networks:
       - app-network
 
@@ -281,7 +281,7 @@ services:
       POSTGRES_USER: kong
       POSTGRES_PASSWORD: password
     ports:
-      - "5438:5432"
+      - "5439:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "kong"]
       interval: 10s
