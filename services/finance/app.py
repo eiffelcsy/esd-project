@@ -27,7 +27,7 @@ def root():
 def health_check():
     return jsonify({"status": "healthy", "service": "finance"}), 200
 
-# WORKS
+# Gets conversion rates for local currency
 @app.route('/finance/rates', methods=['GET'])
 def get_rates():
     # TEST response
@@ -39,11 +39,11 @@ def get_rates():
     
     try:
         rates = ExchangeRateClient.get_latest_rates(base_currency, target_currencies)
-        return jsonify(rates)
+        return jsonify({'result': rates["result"], 'rates': rates["conversion_rates"]})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-# WORKS (smh)
+# Converts a given amount of currency from base currency to target currency
 @app.route('/finance/convert/<string:from_currency>/<string:to_currency>/<float:amount>', methods=['GET'])
 def convert_currency(from_currency, to_currency, amount):
     
@@ -62,7 +62,7 @@ def convert_currency(from_currency, to_currency, amount):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-# WORKS
+# Gets the total amount spent for a trip and splits the total according to the users in the trip
 @app.route('/finance/calculate/<string:trip_id>', methods=['GET'])
 def get_all_expenses(trip_id):
     try:
@@ -82,6 +82,11 @@ def get_all_expenses(trip_id):
         
         # Initialize total amount
         total_amount = 0
+        # Get the list of users for a given trip
+        users = []
+        for e in expenses:
+            if e.user_id not in users:
+                users.append(e.user_id)
             
         # Convert all expenses to base currency and sum them up
         for expense in expenses:
@@ -100,12 +105,27 @@ def get_all_expenses(trip_id):
             'trip_id': trip_id,
             'total_amount': round(total_amount, 2),  # Round to 2 decimal places
             'currency': base_currency,
-            'expense_count': len(expenses)
+            'users': len(users),
+            'split_amount': round((total_amount/len(users)), 2)
         }), 200
             
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+    
+# Add route to update user payment status for a given trip once all users have paid
+@app.route('/finance/update/<string:trip_id>', methods=['PUT'])
+def update_payment_status(trip_id):
+    try:
+        stmt = db.update(Expense).where(Expense.trip_id == trip_id).values(is_paid=True)
+        db.session.execute(stmt)
+        db.session.commit()
+        
+        return jsonify({
+            'result': "Success",
+            'message': "Payment status successfully updated"
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
-    #print("Registered routes:", app.url_map) # Test for registered routes (actually registers)
-    app.run(host='0.0.0.0', port=5006)
+    app.run(host='0.0.0.0', port=5010)
