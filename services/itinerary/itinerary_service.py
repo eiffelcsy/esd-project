@@ -42,14 +42,13 @@ def get_itinerary(trip_id):
 
         if not itinerary:
             app.logger.warning(f"Itinerary not found for trip_id: {trip_id}")
-            # Fetch trip data from trip-management service
+
             response = requests.get(f"{TRIP_MANAGEMENT_URL}/trips/{trip_id}")
             if response.status_code != 200:
                 return jsonify({"error": "Trip not found"}), 404
             
             trip_data = response.json()
 
-            # Create a new itinerary
             itinerary = Itinerary(
                 trip_id=trip_id,
                 destination=trip_data['city'],
@@ -114,7 +113,6 @@ def add_activity(trip_id):
         app.logger.error(f"Error adding activity for trip_id {trip_id}: {str(e)}")
         return jsonify({"error": "Failed to add activity"}), 500
 
-# Add recommended activity to itinerary
 @app.route('/itinerary/<trip_id>/add_recommended_activity', methods=['POST'])
 def add_recommended_activity(trip_id):
     """Add an activity to the itinerary based on a recommendation."""
@@ -123,7 +121,7 @@ def add_recommended_activity(trip_id):
         if not recommendation_id:
             return jsonify({"error": "Recommendation ID is required"}), 400
 
-        response = requests.get(f"http://recommendation-management:5002/recommendations/{trip_id}")
+        response = requests.get(f"http://recommendation-management:5002/api/recommendations/{trip_id}")
         if response.status_code != 200:
             return jsonify({"error": "Failed to fetch recommendations"}), response.status_code
 
@@ -169,7 +167,6 @@ def add_recommended_activity(trip_id):
         app.logger.error(f"Error adding recommended activity for trip_id {trip_id}: {str(e)}")
         return jsonify({"error": "Failed to add recommended activity"}), 500
 
-# Delete activity from itinerary
 @app.route('/itinerary/<trip_id>/activities', methods=['DELETE'])
 def delete_activity(trip_id):
     """Delete an activity from the itinerary."""
@@ -192,7 +189,6 @@ def delete_activity(trip_id):
             app.logger.warning(f"No activities found for date {start_date} in trip_id: {trip_id}")
             return jsonify({"error": "No activities found for this date"}), 404
 
-        # Find and remove the activity
         activities = daily_activities[start_date]
         for i, activity in enumerate(activities):
             if activity['name'] == activity_data['name'] and activity['start_date'] == activity_data['start_date'] and activity['end_date'] == activity_data['end_date'] and activity['start_time'] == activity_data['start_time']:
@@ -202,7 +198,6 @@ def delete_activity(trip_id):
             app.logger.warning(f"Activity not found for trip_id: {trip_id}, date: {start_date}, time: {activity_data['time']}")
             return jsonify({"error": "Activity not found"}), 404
 
-        # Remove the date if no more activities
         if not activities:
             del daily_activities[start_date]
 
@@ -215,20 +210,17 @@ def delete_activity(trip_id):
         app.logger.error(f"Error deleting activity for trip_id {trip_id}: {str(e)}")
         return jsonify({"error": "Failed to delete activity"}), 500
 
-# Delete itinerary
 @app.route('/itinerary/<trip_id>', methods=['DELETE'])
 def delete_itinerary(trip_id):
     """Delete an itinerary."""
     try:
         app.logger.info(f"Attempting to delete itinerary for trip_id: {trip_id}")
         
-        # Fetch the itinerary from the database
         itinerary = Itinerary.query.get(trip_id)
         if not itinerary:
             app.logger.warning(f"Itinerary not found for trip_id: {trip_id}")
             return jsonify({"error": "Itinerary not found"}), 404
 
-        # Delete the itinerary
         db.session.delete(itinerary)
         db.session.commit()
         
@@ -240,5 +232,5 @@ def delete_itinerary(trip_id):
         return jsonify({"error": "Failed to delete itinerary"}), 500
 
 if __name__ == '__main__':
-    db.create_all()  # Ensure tables are created
+    db.create_all()
     app.run(host='0.0.0.0', port=5004)
