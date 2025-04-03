@@ -138,15 +138,26 @@ def add_recommended_activity(trip_id):
             return jsonify({"error": "Itinerary not found"}), 404
 
         daily_activities = itinerary.daily_activities
-        date = recommended_activity.get('suggested_date', datetime.now().date().isoformat())
-        if date not in daily_activities:
-            daily_activities[date] = []
+        start_date = recommended_activity.get('suggested_date', datetime.now().date().isoformat())
+        end_date = recommended_activity.get('end_date', start_date)  # Default to start_date if end_date is not provided
+        start_time = recommended_activity.get('time')
+        end_time = recommended_activity.get('end_time')
 
-        daily_activities[date].append({
+        if not start_date or not start_time or not end_time:
+            return jsonify({"error": "Recommended activity must have a start date, start time, and end time"}), 400
+
+        if end_date < start_date or (end_date == start_date and end_time <= start_time):
+            return jsonify({"error": "End date and time must be later than start date and time"}), 400
+
+        if start_date not in daily_activities:
+            daily_activities[start_date] = []
+
+        daily_activities[start_date].append({
             "name": recommended_activity['name'],
-            "description": recommended_activity.get('description', ''),
-            "time": recommended_activity['time'],
-            "end_time": recommended_activity['end_time'],
+            "start_date": start_date,
+            "end_date": end_date,
+            "start_time": start_time,
+            "end_time": end_time,
             "location": recommended_activity.get('location', '')
         })
 
@@ -163,7 +174,7 @@ def add_recommended_activity(trip_id):
 def delete_activity(trip_id):
     """Delete an activity from the itinerary."""
     activity_data = request.get_json()
-    required_fields = ['start_date', 'end_date', 'start_time', 'name']
+    required_fields = ['name', 'start_date', 'end_date', 'start_time']
     missing_fields = [field for field in required_fields if field not in activity_data]
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
@@ -184,7 +195,7 @@ def delete_activity(trip_id):
         # Find and remove the activity
         activities = daily_activities[start_date]
         for i, activity in enumerate(activities):
-            if activity['start_time'] == activity_data['start_time'] and activity['name'] == activity_data['name']:
+            if activity['name'] == activity_data['name'] and activity['start_date'] == activity_data['start_date'] and activity['end_date'] == activity_data['end_date'] and activity['start_time'] == activity_data['start_time']:
                 del activities[i]
                 break
         else:
