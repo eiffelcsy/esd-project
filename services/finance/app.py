@@ -63,7 +63,8 @@ def convert_currency(from_currency, to_currency, amount):
         return jsonify({'error': str(e)}), 400
 
 # Gets the total amount spent for a trip and splits the total according to the users in the trip
-@app.route('/finance/calculate/<string:trip_id>', methods=['GET'])
+# To add: Split expenses by user -> Show which user owes how much to who
+@app.route('/finance/calculate/<trip_id>', methods=['GET'])
 def get_all_expenses(trip_id):
     try:
         # Get the base currency from query params, default to SGD
@@ -78,7 +79,7 @@ def get_all_expenses(trip_id):
                 'message': 'No expenses found for this trip',
                 'total_amount': 0,
                 'currency': base_currency
-            }), 200
+            }), 200 # Works, but result just means that the database doesn't have any records for the trip
         
         # Initialize total amount
         total_amount = 0
@@ -100,20 +101,89 @@ def get_all_expenses(trip_id):
                     amount=expense.amount
                 )
                 total_amount += converted_amount
-            
+        
+        # Split the expenses by person
+        split_details = {}
+        for u in users:
+            user_expenditure = 0 # Initialize total amount spent by the user
+            descriptions = [] # Initialize the descriptions of user expenditures
+
+            for e in expenses:
+                if e.user_id == u:
+                    # Add the user's expenditure to the user's running total
+                    if e.base_currency == base_currency:
+                        user_expenditure += e.amount
+                    else:
+                        # Convert to base currency using your ExchangeRateClient
+                        converted_amount = ExchangeRateClient.convert_amount(
+                            from_currency=e.base_currency,
+                            to_currency=base_currency,
+                            amount=e.amount
+                        )
+                        user_expenditure += converted_amount
+                    
+                    # Add user expenditure description
+                    descriptions.append(e.description)
+
+                    split_details[u] = {
+                        'total_spent': round(user_expenditure, 2),
+                        'descriptions': descriptions
+                    }
+
+                    # Show the split amount to be paid by other users (total amount split between all users in a trip)
+                    split_details[u].update({
+                        'split_amount': round((user_expenditure/(len(users))), 2),
+                        'payers': [user for user in users if user != u]
+                    })
+
         return jsonify({
             'trip_id': trip_id,
             'total_amount': round(total_amount, 2),  # Round to 2 decimal places
             'currency': base_currency,
             'users': len(users),
-            'split_amount': round((total_amount/len(users)), 2)
+            'split_details': split_details 
         }), 200
             
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     
+# Add route to add expense into database
+@app.route('/finance/<trip_id>/add', methods=['POST'])
+def add_expense(trip_id):
+    try:
+        data = request.get_json()
+        required_fields = ['user_id', 'date', 'location', 'amount', 'base_currency', 'description', 'is_paid']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+        try:
+            new_expense = Expense(trip_id, **data)
+            db.session.add(new_expense)
+            db.session.commit()
+        except:
+            return jsonify(
+            {
+                "result": "fail",
+                "data": {
+                    "trip_id": trip_id
+                },
+                "message": "An error occured creating the expense."
+            }
+            ), 500
+        # Successful addition
+        return jsonify(
+            {
+                "result": "success",
+                "data": new_expense.json(),
+                "message": "Expense created successfully"
+            }
+        ), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 # Add route to update user payment status for a given trip once all users have paid
-@app.route('/finance/update/<string:trip_id>', methods=['PUT'])
+@app.route('/finance/update/<trip_id>', methods=['PUT'])
 def update_payment_status(trip_id):
     try:
         stmt = db.update(Expense).where(Expense.trip_id == trip_id).values(is_paid=True)
