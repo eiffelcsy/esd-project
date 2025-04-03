@@ -10,6 +10,7 @@ services:
       - itinerary
       - recommendation-management
       - rabbitmq
+      - finance
 
   trip-management:
     build: ./trip-management

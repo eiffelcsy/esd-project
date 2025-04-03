@@ -4,7 +4,7 @@ services:
       - .env
     build: .
     ports:
-      - "5006:5006"
+      - "5010:5010"
     environment:
       - DB_URL=mysql+mysqlconnector://is213@host.docker.internal:3306/expenses
       - AMQP_URL=amqp://guest:guest@rabbitmq:5672/
