@@ -1,11 +1,16 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from icalendar import Calendar, Event
 import requests
 import json
-import io
 import os
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 app = Flask(__name__)
 
@@ -108,12 +113,10 @@ def add_activity(trip_id):
 def add_recommended_activity(trip_id):
     """Add an activity to the itinerary based on a recommendation."""
     try:
-        # Fetch the recommendation ID from the request
         recommendation_id = request.json.get('recommendation_id')
         if not recommendation_id:
             return jsonify({"error": "Recommendation ID is required"}), 400
 
-        # Fetch the recommendation from the recommendation-management service
         response = requests.get(f"http://recommendation-management:5002/recommendations/{trip_id}")
         if response.status_code != 200:
             return jsonify({"error": "Failed to fetch recommendations"}), response.status_code
@@ -124,7 +127,6 @@ def add_recommended_activity(trip_id):
         if not recommended_activity:
             return jsonify({"error": "Recommendation not found"}), 404
 
-        # Add the recommended activity to the itinerary
         itinerary = Itinerary.query.get(trip_id)
         if not itinerary:
             return jsonify({"error": "Itinerary not found"}), 404
@@ -137,8 +139,8 @@ def add_recommended_activity(trip_id):
         daily_activities[date].append({
             "name": recommended_activity['name'],
             "description": recommended_activity.get('description', ''),
-            "time": recommended_activity.get('time', '09:00'),
-            "end_time": recommended_activity.get('end_time', '11:00'),
+            "time": recommended_activity['time'],
+            "end_time": recommended_activity['end_time'],
             "location": recommended_activity.get('location', '')
         })
 

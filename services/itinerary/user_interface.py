@@ -1,7 +1,12 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 import requests
-import json
 import os
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # For session management
@@ -21,24 +26,21 @@ def index():
 def new_trip():
     """Create a new trip."""
     if request.method == 'POST':
-
         response = requests.post(
             f"{TRIP_SERVICE}/trips",
             json={
-                "userId": session.get('user_id', '12345'),  # In reality, get from auth system
+                "userId": session.get('user_id', '12345'),
                 "destination": request.form['destination'],
                 "startDate": request.form['start_date'],
                 "endDate": request.form['end_date']
             }
         )
-        
         if response.status_code == 201:
             trip_data = response.json()
             return redirect(url_for('view_trip', trip_id=trip_data['tripId']))
         else:
             error = response.json().get('error', 'Failed to create trip')
             return render_template('new_trip.html', error=error)
-    
     return render_template('new_trip.html')
 
 @app.route('/trips/<trip_id>')
@@ -80,22 +82,13 @@ def get_trip_details(trip_id):
     trip_data = response.json()
     return jsonify(trip_data), 200
 
-@app.route('/recommendations', methods=['POST'])
-def receive_recommendations():
-    """Receive recommendations from Message Broker."""
-    data = request.json
-    
-    return jsonify({"status": "received"}), 200
-
 @app.route('/recommendations/<trip_id>', methods=['GET'])
 def get_recommendations(trip_id):
     """Fetch recommendations for a specific trip."""
     response = requests.get(f"{RECOMMENDATION_SERVICE}/recommendations/{trip_id}")
     if response.status_code != 200:
         return render_template('error.html', message="Recommendations not found"), 404
-    
-    recommendations = response.json()
-    return jsonify(recommendations), 200
+    return jsonify(response.json()), 200
 
 @app.route('/itinerary/<trip_id>', methods=['GET'])
 def get_itinerary(trip_id):
