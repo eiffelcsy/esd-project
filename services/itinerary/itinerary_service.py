@@ -13,15 +13,13 @@ logging.basicConfig(
 
 app = Flask(__name__)
 
-# Configure service URLs and database connection
 TRIP_MANAGEMENT_URL = os.getenv('TRIP_MANAGEMENT_URL', 'http://trip-management:5007')
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/itinerary_db')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres@localhost:5432/itinerary_db')
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Database model for itineraries
 class Itinerary(db.Model):
     __tablename__ = 'itineraries'
     trip_id = db.Column(db.String, primary_key=True)
@@ -73,18 +71,19 @@ def get_itinerary(trip_id):
         app.logger.error(f"Error fetching itinerary for trip_id {trip_id}: {str(e)}")
         return jsonify({"error": "Failed to fetch itinerary"}), 500
 
-# Add activity to itinerary
 @app.route('/itinerary/<trip_id>/activities', methods=['PUT'])
 def add_activity(trip_id):
     """Add an activity to the itinerary."""
     activity_data = request.get_json()
-    required_fields = ['name', 'date', 'time', 'end_time', 'location']
+    required_fields = ['name', 'start_date', 'end_date', 'start_time', 'end_time', 'location']
     missing_fields = [field for field in required_fields if field not in activity_data]
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
-    if activity_data['end_time'] <= activity_data['time']:
-        return jsonify({"error": "End time must be later than start time"}), 400
+    if activity_data['end_date'] <= activity_data['start_date']:
+        return jsonify({"error": "End date must be later than start date"}), 400
+    if activity_data['end_date'] == activity_data['start_date'] and activity_data['end_time'] <= activity_data['start_time']:
+        return jsonify({"error": "End time must be later than start time on the same day"}), 400
 
     try:
         app.logger.info(f"Adding activity to itinerary for trip_id: {trip_id}")
@@ -94,10 +93,18 @@ def add_activity(trip_id):
             return jsonify({"error": "Itinerary not found"}), 404
 
         daily_activities = itinerary.daily_activities
-        if activity_data['date'] not in daily_activities:
-            daily_activities[activity_data['date']] = []
+        start_date = activity_data['start_date']
+        if start_date not in daily_activities:
+            daily_activities[start_date] = []
 
-        daily_activities[activity_data['date']].append(activity_data)
+        daily_activities[start_date].append({
+            "name": activity_data['name'],
+            "start_date": activity_data['start_date'],
+            "end_date": activity_data['end_date'],
+            "start_time": activity_data['start_time'],
+            "end_time": activity_data['end_time'],
+            "location": activity_data['location']
+        })
         itinerary.daily_activities = daily_activities
 
         db.session.commit()
@@ -156,7 +163,7 @@ def add_recommended_activity(trip_id):
 def delete_activity(trip_id):
     """Delete an activity from the itinerary."""
     activity_data = request.get_json()
-    required_fields = ['date', 'time', 'name']
+    required_fields = ['start_date', 'end_date', 'start_time', 'name']
     missing_fields = [field for field in required_fields if field not in activity_data]
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
@@ -169,24 +176,24 @@ def delete_activity(trip_id):
             return jsonify({"error": "Itinerary not found"}), 404
 
         daily_activities = itinerary.daily_activities
-        date = activity_data['date']
-        if date not in daily_activities:
-            app.logger.warning(f"No activities found for date {date} in trip_id: {trip_id}")
+        start_date = activity_data['start_date']
+        if start_date not in daily_activities:
+            app.logger.warning(f"No activities found for date {start_date} in trip_id: {trip_id}")
             return jsonify({"error": "No activities found for this date"}), 404
 
         # Find and remove the activity
-        activities = daily_activities[date]
+        activities = daily_activities[start_date]
         for i, activity in enumerate(activities):
-            if activity['time'] == activity_data['time'] and activity['name'] == activity_data['name']:
+            if activity['start_time'] == activity_data['start_time'] and activity['name'] == activity_data['name']:
                 del activities[i]
                 break
         else:
-            app.logger.warning(f"Activity not found for trip_id: {trip_id}, date: {date}, time: {activity_data['time']}")
+            app.logger.warning(f"Activity not found for trip_id: {trip_id}, date: {start_date}, time: {activity_data['time']}")
             return jsonify({"error": "Activity not found"}), 404
 
         # Remove the date if no more activities
         if not activities:
-            del daily_activities[date]
+            del daily_activities[start_date]
 
         itinerary.daily_activities = daily_activities
         db.session.commit()
