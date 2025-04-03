@@ -10,6 +10,7 @@ app = Flask(__name__)
 
 # Configure trip-management service URL from environment
 TRIP_MANAGEMENT_URL = os.getenv('TRIP_MANAGEMENT_URL', 'http://trip-management:5007')
+FINANCE_SERVICE_URL = os.getenv('FINANCE_SERVICE_URL', 'http://finance:5010')
 
 # In-memory storage for itineraries
 itineraries = {}
@@ -201,41 +202,6 @@ def export_to_google_calendar(trip_id):
         return jsonify({"error": f"Failed to export to Google Calendar: {str(e)}"}), 500
     
     return send_file(ics_file, as_attachment=True, download_name=f"itinerary_{trip_id}.ics")
-
-# Scenario 3: Finances
-# Add expense to itinerary
-@app.route('/itinerary/<trip_id>/expenses', methods=['POST'])
-def add_expense_to_itinerary(trip_id):
-    """Add an expense to the itinerary."""
-    expense_data = request.get_json()
-
-    if trip_id not in itineraries:
-        return jsonify({"error": "Itinerary not found"}), 404
-
-    required_fields = ['amount', 'paid_by', 'split_details']
-    missing_fields = [field for field in required_fields if field not in expense_data]
-    if missing_fields:
-        return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
-
-    itinerary = itineraries[trip_id]
-    if 'expenses' not in itinerary:
-        itinerary['expenses'] = []
-
-    itinerary['expenses'].append(expense_data)
-
-    return jsonify({"message": "Expense added successfully"}), 200
-
-# Get all expenses for a trip
-@app.route('/itinerary/<trip_id>/expenses', methods=['GET'])
-def get_expenses_for_itinerary(trip_id):
-    """Retrieve all expenses for a specific trip."""
-    if trip_id not in itineraries:
-        return jsonify({"error": "Itinerary not found"}), 404
-
-    itinerary = itineraries[trip_id]
-    expenses = itinerary.get('expenses', [])
-
-    return jsonify({"expenses": expenses}), 200
 
 # Delete itinerary
 @app.route('/itinerary/<trip_id>', methods=['DELETE'])
