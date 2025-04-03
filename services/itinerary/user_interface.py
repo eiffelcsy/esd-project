@@ -140,11 +140,44 @@ def add_activity_to_itinerary(trip_id):
     
     return jsonify({"message": "Activity added successfully"}), 200
 
+@app.route('/trips/<trip_id>/delete_activity', methods=['POST'])
+def delete_activity(trip_id):
+    """Delete an activity from a trip."""
+    activity_data = {
+        "date": request.form['date'],
+        "time": request.form['time'],
+        "name": request.form['name']
+    }
+    
+    response = requests.delete(
+        f"{ITINERARY_SERVICE}/itinerary/{trip_id}/activities",
+        json=activity_data
+    )
+    
+    if response.status_code == 200:
+        return redirect(url_for('view_trip', trip_id=trip_id))
+    else:
+        error = response.json().get('error', 'Failed to delete activity')
+        return render_template('error.html', message=error), response.status_code
+
+@app.route('/trips/<trip_id>/delete', methods=['POST'])
+def delete_itinerary(trip_id):
+    """Delete an itinerary."""
+    response = requests.delete(f"{ITINERARY_SERVICE}/itinerary/{trip_id}")
+    
+    if response.status_code == 200:
+        return redirect(url_for('index'))
+    else:
+        error = response.json().get('error', 'Failed to delete itinerary')
+        return render_template('error.html', message=error), response.status_code
+
 @app.route('/trips/<trip_id>/export_calendar', methods=['POST'])
 def export_calendar(trip_id):
     """Export itinerary to Google Calendar."""
-    # In a real app, you'd get the token from OAuth flow
     token = request.form.get('google_token', '')
+    
+    if not token:
+        return render_template('error.html', message="Google token is required"), 400
     
     response = requests.post(
         f"{ITINERARY_SERVICE}/itinerary/{trip_id}/export",
@@ -152,7 +185,7 @@ def export_calendar(trip_id):
     )
     
     if response.status_code == 200:
-        return redirect(url_for('view_trip', trip_id=trip_id, calendar_exported=True))
+        return response  # Return the ICS file directly
     else:
         error = response.json().get('error', 'Failed to export to calendar')
         return render_template('error.html', message=error), response.status_code
