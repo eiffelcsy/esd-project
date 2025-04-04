@@ -2,25 +2,50 @@ import os
 from openai import OpenAI
 import json
 from datetime import date
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def get_env_var(key, default=None):
     value = os.environ.get(key, default)
     if value is None or value.strip() == '':
-        raise ValueError(f"Missing required environment variable: {key}")
+        logger.error(f"Missing required environment variable: {key}")
+        return None
     return value.strip()
 
-# Initialize the OpenAI client with better error handling
-try:
-    api_key = get_env_var('OPENAI_API_KEY')
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY cannot be empty")
-    client = OpenAI(api_key=api_key)
-except ValueError as e:
-    print(f"❌ Error initializing OpenAI client: {e}")
-    print("Please ensure OPENAI_API_KEY is properly set in your environment")
-    raise
+def get_openai_client():
+    """Initialize and return an OpenAI client, or None if initialization fails"""
+    try:
+        api_key = get_env_var('OPENAI_API_KEY')
+        if not api_key:
+            logger.error("OPENAI_API_KEY is empty or not set")
+            return None
+        
+        client = OpenAI(api_key=api_key)
+        logger.info("Successfully initialized OpenAI client")
+        return client
+    except Exception as e:
+        logger.error(f"Error initializing OpenAI client: {e}")
+        logger.error("Please ensure OPENAI_API_KEY is properly set in your environment")
+        return None
 
 def get_recommendations(destination, start_date, end_date):
+    logger.info(f"Getting recommendations for {destination} from {start_date} to {end_date}")
+    
+    # Initialize the OpenAI client within this function
+    client = get_openai_client()
+    if not client:
+        logger.error("Failed to initialize OpenAI client, returning error response")
+        return {
+            "error": "OpenAI API key not configured properly",
+            "attractions": [],
+            "restaurants": [],
+            "activities": [],
+            "events": [],
+            "tips": ["OpenAI API is not configured properly. Please check your environment variables."]
+        }
 
     # Calculate trip duration
     trip_duration = (end_date - start_date).days + 1
@@ -56,28 +81,43 @@ def get_recommendations(destination, start_date, end_date):
     }}
     """
     
-    # Call OpenAI API
-    response = client.chat.completions.create(
-        model="gpt-4-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations in JSON format."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=800
-    )
-    
-    # Extract and parse the response
-    result = response.choices[0].message.content
-    
-    # Clean up the response to ensure it's valid JSON
-    # Remove any markdown code block syntax and trim whitespace
-    result = result.replace("```json", "").replace("```", "").strip()
-    
     try:
-        # Parse the JSON response
-        recommendations = json.loads(result)
-        return recommendations
-    except json.JSONDecodeError:
-        # If parsing fails, return a simple error object
-        return {"error": "Failed to parse recommendations", "raw_response": result} 
+        # Call OpenAI API
+        logger.info("Sending request to OpenAI API")
+        response = client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations in JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=800
+        )
+        
+        # Extract and parse the response
+        result = response.choices[0].message.content
+        logger.info("Received response from OpenAI API")
+        
+        # Clean up the response to ensure it's valid JSON
+        # Remove any markdown code block syntax and trim whitespace
+        result = result.replace("```json", "").replace("```", "").strip()
+        
+        try:
+            # Parse the JSON response
+            recommendations = json.loads(result)
+            logger.info("Successfully parsed OpenAI response")
+            return recommendations
+        except json.JSONDecodeError as e:
+            # If parsing fails, return a simple error object
+            logger.error(f"Failed to parse OpenAI response: {e}")
+            return {"error": "Failed to parse recommendations", "raw_response": result}
+    except Exception as e:
+        logger.error(f"Error calling OpenAI API: {e}")
+        return {
+            "error": f"Failed to get recommendations from OpenAI: {str(e)}",
+            "attractions": [],
+            "restaurants": [],
+            "activities": [],
+            "events": [],
+            "tips": [f"Error: {str(e)}"]
+        } 
