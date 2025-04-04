@@ -4,11 +4,7 @@ import time
 import pika
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app import UserAvailability, Calendar  # Import models from app.py
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from app.models import UserAvailability, Calendar  # Import models from app.py
 
 # Database connection
 database_url = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@calendar-db:5432/calendar_db')
@@ -55,26 +51,31 @@ def process_message(ch, method, properties, body):
         if 'session' in locals():
             session.close()
 
+def connect_to_rabbitmq():
+    """Connect to RabbitMQ and return connection and channel"""
+    # Get RabbitMQ connection details
+    rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+    
+    print(f"🔄 Connecting to RabbitMQ at {rabbitmq_host}...")
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host=rabbitmq_host,
+            port=5672,
+            connection_attempts=5,
+            retry_delay=5
+        )
+    )
+    
+    channel = connection.channel()
+    print(f"✅ Connected to RabbitMQ at {rabbitmq_host}")
+    return connection, channel
+
 def main():
     """Main consumer function"""
     # Connection retry loop
     while True:
         try:
-            # Get RabbitMQ connection details
-            rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-            
-            print(f"🔄 Connecting to RabbitMQ at {rabbitmq_host}...")
-            connection = pika.BlockingConnection(
-                pika.ConnectionParameters(
-                    host=rabbitmq_host,
-                    port=5672,
-                    connection_attempts=5,
-                    retry_delay=5
-                )
-            )
-            
-            channel = connection.channel()
-            print(f"✅ Connected to RabbitMQ at {rabbitmq_host}")
+            connection, channel = connect_to_rabbitmq()
             
             # Declare queue
             channel.queue_declare(queue='user_availability')

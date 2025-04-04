@@ -9,21 +9,17 @@ def register_routes(app):
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['username', 'email', 'password']
+        required_fields = ['email', 'password']
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'{field} is required'}), 400
         
-        # Check if username or email already exists
-        if User.query.filter_by(username=data['username']).first():
-            return jsonify({'error': 'Username already taken'}), 400
-        
+        # Check if email already exists
         if User.query.filter_by(email=data['email']).first():
             return jsonify({'error': 'Email already registered'}), 400
         
         # Create new user
         new_user = User(
-            username=data['username'],
             email=data['email'],
             password=data['password'],
             first_name=data.get('first_name'),
@@ -46,15 +42,15 @@ def register_routes(app):
         data = request.get_json()
         
         # Validate required fields
-        if not data or 'username' not in data or 'password' not in data:
-            return jsonify({'error': 'Username and password are required'}), 400
+        if not data or 'email' not in data or 'password' not in data:
+            return jsonify({'error': 'Email and password are required'}), 400
         
-        # Find user by username
-        user = User.query.filter_by(username=data['username']).first()
+        # Find user by email
+        user = User.query.filter_by(email=data['email']).first()
         
         # Check if user exists and password is correct
         if not user or not user.check_password(data['password']):
-            return jsonify({'error': 'Invalid username or password'}), 401
+            return jsonify({'error': 'Invalid email or password'}), 401
         
         return jsonify({
             'message': 'Login successful',
@@ -100,12 +96,12 @@ def register_routes(app):
         user = User.query.get_or_404(user_id)
         return jsonify(user.to_public_dict()), 200
     
-    # Search users by username
+    # Search users by email
     @app.route('/api/users/search', methods=['GET'])
     def search_users():
         query = request.args.get('q', '')
         if not query:
             return jsonify({'error': 'Query parameter is required'}), 400
         
-        users = User.query.filter(User.username.ilike(f'%{query}%')).all()
+        users = User.query.filter(User.email.ilike(f'%{query}%')).all()
         return jsonify([user.to_public_dict() for user in users]), 200 
