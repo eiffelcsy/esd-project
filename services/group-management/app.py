@@ -11,7 +11,7 @@ load_dotenv()
 # Initialize the Flask application
 app = Flask(__name__)
 # Configure CORS to allow requests from frontend
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost"]}})
+CORS(app, origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost"], supports_credentials=True, methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 # Configure the database
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@grouprequest-db:5432/grouprequest_db')
