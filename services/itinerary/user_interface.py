@@ -11,6 +11,7 @@ TRIP_SERVICE = "http://trip-management:5001"
 RECOMMENDATION_SERVICE = "http://recommendation-management:5002"
 ITINERARY_SERVICE = "http://itinerary:5004"
 EXPENSE_MANAGEMENT_SERVICE = "http://expense-management:5005"
+FINANCE_SERVICE = "http://finance:5010"
 
 @app.route('/')
 def index():
@@ -175,6 +176,74 @@ def add_expense():
 
     except Exception as e:
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+    
+@app.route('/finance/rates', methods=['GET'])
+def get_rates():
+    """Get conversion rates data from the Finance service"""
+    try:
+        response = requests.get(
+            f"{FINANCE_SERVICE}/finance/rates"
+        )
+
+        if response.status_code != 200:
+            return render_template('error.html', message="Could not get conversion rates."), 404
+    
+        rates = response.json()
+        return jsonify(rates), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/finance/convert/<string:from_currency>/<string:to_currency>/<float:amount>', methods=['GET'])
+def convert_currency(from_currency, to_currency, amount):
+    """Get currency conversion data from the Finance service"""
+    try:
+        response = requests.get(
+            f"{FINANCE_SERVICE}/finance/convert/{from_currency}/{to_currency}/{amount}"
+        )
+
+        if response.status_code != 200:
+            return render_template('error.html', message="Error converting currency."), 404
+
+        result = response.json()
+        return jsonify(result), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/finance/calculate/<trip_id>', methods=['GET'])
+def get_all_expenses(trip_id):
+    """Get all expenses of a certain trip from Finance service"""
+    try:
+        response = requests.get(
+            f"{FINANCE_SERVICE}/finance/calculate/{trip_id}"
+        )
+
+        if response.status_code != 200:
+            return render_template('error.html', message="Error getting expenses."), 404
+
+        result = response.json()
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/finance/update/<trip_id>', methods=['PUT'])
+def update_payment_status(trip_id):
+    """Update payment status for a trip once all users have settled their payments"""
+    try:
+        response = requests.put(
+            f"{FINANCE_SERVICE}/finance/update/{trip_id}"
+        )
+
+        if response.status_code != 200:
+            return render_template('error.html', message="Error updating payment status."), 404
+
+        result = response.json()
+        return jsonify(result), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
