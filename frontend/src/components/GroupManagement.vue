@@ -911,10 +911,10 @@ const fetchGroups = async () => {
           memberIds: item.UserIds || [],
           members: memberEmails,
           description: item.Description,
-          status: data ? 'completed' : 'pending',
-          trips: existingGroup ? existingGroup.trips : [],
-          tripsLoaded: existingGroup ? existingGroup.tripsLoaded : false,
-          tripsLoading: false,
+          status: 'completed',
+          trips: [],
+          tripsLoaded: false,
+          tripsLoading: true,
           tripsError: null
         };
         
@@ -948,6 +948,7 @@ const fetchTripsForGroup = async (group) => {
     
     group.tripsLoading = true
     group.tripsError = null
+    group.tripsLoaded = false
     
     const response = await fetch(`http://localhost:5005/api/groups/${group.id}/trips`, {
       headers: {
@@ -957,23 +958,25 @@ const fetchTripsForGroup = async (group) => {
     
     if (response.ok) {
       const data = await response.json()
-      group.trips = data || []
+      group.trips = Array.isArray(data) ? data : []
       group.tripsLoaded = true
+      group.tripsLoading = false
     } else if (response.status === 404) {
       // No trips found is a normal condition, not an error
       group.trips = []
       group.tripsLoaded = true
+      group.tripsLoading = false
     } else {
       const errorText = await response.text()
       console.error(`Failed to fetch trips for group ${group.id}:`, errorText)
       group.tripsError = `Error loading trips: ${errorText}`
       group.tripsLoaded = false
+      group.tripsLoading = false
     }
   } catch (error) {
     console.error(`Error fetching trips for group ${group.id}:`, error)
     group.tripsError = `Error: ${error.message}`
     group.tripsLoaded = false
-  } finally {
     group.tripsLoading = false
   }
 }
@@ -1116,12 +1119,97 @@ const fetchPendingInvitations = async () => {
   }
 }
 
-const acceptInvitation = (groupId) => {
-  // Implementation of accepting an invitation
+const acceptInvitation = async (groupId) => {
+  try {
+    isJoiningGroup.value = true
+    joiningGroupId.value = groupId
+    invitationError.value = ''
+    
+    const invitation = pendingInvitations.value.find(i => i.id === groupId)
+    if (!invitation) {
+      console.error('Invitation not found')
+      return
+    }
+    
+    const response = await fetch(`http://localhost:5003/api/groups/${groupId}/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': userStore.userId.toString(),
+        'X-User-Email': userStore.userEmail || ''
+      },
+      body: JSON.stringify({
+        user_id: userStore.userId
+      })
+    })
+    
+    if (response.ok) {
+      // Remove from pending invitations
+      pendingInvitations.value = pendingInvitations.value.filter(i => i.id !== groupId)
+      
+      // Update the notification
+      lastCreatedGroup.value = {
+        name: invitation.name
+      }
+      notificationType.value = 'join'
+      showNotification.value = true
+      
+      // Auto-dismiss notification after 5 seconds
+      setTimeout(() => {
+        showNotification.value = false
+      }, 5000)
+      
+      // Refresh the groups list to show the new group
+      await fetchGroups()
+      
+      console.log('Successfully joined group')
+    } else {
+      const errorText = await response.text()
+      invitationError.value = `Failed to join group: ${errorText}`
+      console.error('Failed to join group:', errorText)
+    }
+  } catch (error) {
+    console.error('Error joining group:', error)
+    invitationError.value = `Error joining group: ${error.message}`
+  } finally {
+    isJoiningGroup.value = false
+    joiningGroupId.value = null
+  }
 }
 
-const declineInvitation = (groupId) => {
-  // Implementation of declining an invitation
+const declineInvitation = async (groupId) => {
+  try {
+    isDecliningInvitation.value = true
+    invitationError.value = ''
+    
+    const invitation = pendingInvitations.value.find(i => i.id === groupId)
+    if (!invitation) {
+      console.error('Invitation not found')
+      return
+    }
+    
+    // Remove from pending invitations (client-side only)
+    pendingInvitations.value = pendingInvitations.value.filter(i => i.id !== groupId)
+    
+    // Update the notification
+    lastCreatedGroup.value = {
+      name: invitation.name
+    }
+    notificationType.value = 'decline'
+    showNotification.value = true
+    
+    // Auto-dismiss notification after 5 seconds
+    setTimeout(() => {
+      showNotification.value = false
+    }, 5000)
+    
+    console.log('Declined invitation')
+  } catch (error) {
+    console.error('Error declining invitation:', error)
+    invitationError.value = `Error declining invitation: ${error.message}`
+  } finally {
+    isDecliningInvitation.value = false
+  }
 }
 </script>
 
