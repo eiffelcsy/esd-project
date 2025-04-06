@@ -330,40 +330,59 @@ def register_routes(app):
     def get_invited_groups(user_id):
         """Get all groups a user is invited to but hasn't joined yet"""
         try:
-            # First get all groups the user is already a member of
-            success, active_groups_response = GroupService.get_user_groups(user_id)
-            
-            if not success:
-                return jsonify({'error': 'Failed to get user groups'}), 500
-            
-            # Get the IDs of groups the user is already a member of
-            active_group_ids = []
-            if isinstance(active_groups_response, list):
-                active_group_ids = [g.get('Id') for g in active_groups_response]
-            
-            # Find group requests where the user is in the invited list
-            # but not yet an active member of the group
-            invited_groups = []
+            # Convert user_id to string for comparison
             str_user_id = str(user_id)
             
-            # Get all group requests
-            requests = GroupRequest.query.filter(GroupRequest.status == 'completed').all()
+            # Find group requests where:
+            # 1. The user is in the users list (invited)
+            # 2. The user is not in joined_users (hasn't accepted yet)
+            # 3. The group has been created successfully
+            invited_groups = []
+            requests = GroupRequest.query.filter(
+                GroupRequest.status.in_(['completed', 'partial'])  # Group creation succeeded or partially succeeded
+            ).all()
             
             for req in requests:
-                group_id = req.group_id
-                
-                # Skip if the group is already in the user's active groups
-                if group_id in active_group_ids:
+                # Skip if user is not in the users list
+                if str_user_id not in [str(u) for u in req.users]:
                     continue
+                    
+                # Skip if user has already joined
+                if req.joined_users and str_user_id in [str(u) for u in req.joined_users]:
+                    continue
+                    
+                # Get creator's email
+                success, creator_data = UserService.validate_user(req.created_by)
+                creator_email = creator_data.get('email', f'User {req.created_by}') if success else f'User {req.created_by}'
                 
-                # Check if user is in the invited list
-                if str_user_id in [str(u) for u in req.users]:
-                    invited_groups.append(req.to_dict())
+                # Get all member emails
+                member_emails = []
+                for member_id in req.users:
+                    success, member_data = UserService.validate_user(member_id)
+                    if success:
+                        member_emails.append(member_data.get('email', f'User {member_id}'))
+                    else:
+                        member_emails.append(f'User {member_id}')
+                
+                # Format the response
+                group_data = {
+                    'group_id': req.group_id,
+                    'id': req.group_id,  # For frontend compatibility
+                    'name': req.name,
+                    'description': req.description,
+                    'created_by': req.created_by,
+                    'created_by_email': creator_email,
+                    'users': member_emails,
+                    'start_date_range': req.start_date_range.isoformat() if req.start_date_range else None,
+                    'end_date_range': req.end_date_range.isoformat() if req.end_date_range else None
+                }
+                invited_groups.append(group_data)
             
             return jsonify(invited_groups), 200
             
         except Exception as e:
-            return jsonify({'error': f'Error getting invited groups: {str(e)}'}), 500 
+            print(f"Error in get_invited_groups: {str(e)}")  # Log the error
+            return jsonify({'error': f'Error getting invited groups: {str(e)}'}), 500
 
     @app.route('/api/groups/<int:group_id>/availability', methods=['POST'])
     def submit_availability(group_id):
