@@ -332,8 +332,8 @@ async function fetchRecommendations() {
   
   loadingRecommendations.value = true;
   let retries = 0;
-  const maxRetries = 10;
-  const retryDelay = 3000; // 3 seconds
+  const maxRetries = 20; // Increased from 10 to 20 retries
+  const retryDelay = 6000; // Increased from 3000 to 6000ms (6 seconds)
 
   const tryFetch = async () => {
     try {
@@ -343,6 +343,8 @@ async function fetchRecommendations() {
         // If recommendations don't exist yet, request them
         if (retries === 0) {
           console.log("Creating new recommendations for trip:", trip.value.id);
+          showNotification('Generating recommendations using AI... This may take up to 2 minutes.', 'info', 10000);
+          
           const createResponse = await fetch(`http://localhost:5002/api/recommendations`, {
             method: 'POST',
             headers: {
@@ -369,6 +371,9 @@ async function fetchRecommendations() {
         // If we haven't exceeded max retries, try again after delay
         if (retries < maxRetries) {
           console.log(`Retry ${retries + 1}/${maxRetries} fetching recommendations...`);
+          if (retries % 5 === 0) { // Show progress notification every 5 retries
+            showNotification(`Still generating recommendations... (${Math.round((retries/maxRetries) * 100)}% complete)`, 'info', 5000);
+          }
           retries++;
           await new Promise(resolve => setTimeout(resolve, retryDelay));
           return tryFetch();
@@ -392,7 +397,7 @@ async function fetchRecommendations() {
       }
       
       loadingRecommendations.value = false;
-      showNotification('Recommendations loaded successfully', 'success');
+      showNotification('Recommendations loaded successfully!', 'success');
     } catch (error) {
       console.error('Error fetching recommendations:', error);
       loadingRecommendations.value = false;
