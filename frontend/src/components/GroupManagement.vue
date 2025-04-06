@@ -1187,8 +1187,25 @@ const declineInvitation = async (groupId) => {
       console.error('Invitation not found')
       return
     }
+
+    // Call the API to decline the invitation
+    const response = await fetch(`http://localhost:5003/api/groups/${groupId}/decline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': userStore.userId.toString(),
+        'X-User-Email': userStore.userEmail || ''
+      },
+      body: JSON.stringify({
+        user_id: userStore.userId
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to decline invitation: ${response.statusText}`)
+    }
     
-    // Remove from pending invitations (client-side only)
+    // Remove from pending invitations
     pendingInvitations.value = pendingInvitations.value.filter(i => i.id !== groupId)
     
     // Update the notification

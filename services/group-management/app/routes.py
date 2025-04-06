@@ -187,6 +187,9 @@ def register_routes(app):
                 if str(user_id) not in joined_users:
                     group_request.joined_users.append(user_id)
             
+            # Remove user from the users list since they've now joined
+            group_request.users = [u for u in group_request.users if str(u) != str(user_id)]
+            
             db.session.commit()
             
             return jsonify({
@@ -497,3 +500,44 @@ def register_routes(app):
             
         # Return the group data which should include the UserIds array
         return jsonify(group_data), 200 
+
+    @app.route('/api/groups/<int:group_id>/decline', methods=['POST'])
+    def decline_invitation(group_id):
+        """
+        Endpoint for a user to decline a group invitation
+        """
+        data = request.get_json()
+        
+        # Validate required fields
+        if 'user_id' not in data:
+            return jsonify({'error': 'user_id is required'}), 400
+            
+        user_id = data['user_id']
+        
+        # First, verify the group exists in our records
+        group_request = GroupRequest.query.filter_by(group_id=group_id).first()
+        if not group_request:
+            return jsonify({'error': f'Group with ID {group_id} not found in our records'}), 404
+            
+        # Check if user is in the invited list (convert to strings for comparison)
+        users_list = [str(u) for u in group_request.users]
+        if str(user_id) not in users_list:
+            return jsonify({'error': 'User is not invited to this group'}), 403
+            
+        # Check if user has already joined
+        if group_request.joined_users and str(user_id) in [str(u) for u in group_request.joined_users]:
+            return jsonify({'error': 'User has already joined this group'}), 400
+            
+        # Remove user from the users list
+        group_request.users = [u for u in group_request.users if str(u) != str(user_id)]
+        
+        try:
+            db.session.commit()
+            return jsonify({
+                'message': f'User {user_id} successfully declined invitation to group {group_id}',
+                'group_id': group_id,
+                'user_id': user_id
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Error declining invitation: {str(e)}'}), 500 
