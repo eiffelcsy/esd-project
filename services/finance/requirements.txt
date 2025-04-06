@@ -11,3 +11,6 @@ psycopg2-binary==2.9.9
 pytest==8.3.5
 pytest-cov==6.0.0
 requests-mock==1.12.1
+
+# Email
+resend==2.7.0

@@ -16,6 +16,10 @@ def add_expense():
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
+    # Add payee_id if not present
+    if 'payee_id' not in expense_data:
+        expense_data['payee_id'] = None
+
     # Forward the expense data to the Finance service
     try:
         response = requests.post(

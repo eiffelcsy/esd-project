@@ -14,8 +14,9 @@ class Expense(db.Model):
     description = db.Column(db.String(64))
     is_paid = db.Column(db.Boolean, default=False)
     category = db.Column(db.String(64))
+    payee_id = db.Column(db.String(64), nullable=True)
 
-    def __init__(self, trip_id, user_id, date, location, amount, base_currency, description, is_paid, category):
+    def __init__(self, trip_id, user_id, date, location, amount, base_currency, description, is_paid, category, payee_id=None):
         self.trip_id = trip_id
         self.user_id = user_id
         self.date = date
@@ -25,6 +26,7 @@ class Expense(db.Model):
         self.description = description
         self.is_paid = is_paid
         self.category = category
+        self.payee_id = payee_id
 
     def json(self):
         return {
@@ -36,7 +38,8 @@ class Expense(db.Model):
             "base_currency": self.base_currency, 
             "description": self.description, 
             "is_paid": self.is_paid,
-            "category": self.category
+            "category": self.category,
+            "payee_id": self.payee_id
         }
 
 class UserReadiness(db.Model):
