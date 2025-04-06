@@ -311,77 +311,77 @@ const fetchTripDetails = async () => {
     trip.value = await response.json();
   } catch (error) {
     console.error("Error fetching trip details:", error);
+    showNotification('Failed to load trip details. Please try again later.', 'error');
   }
 };
 
-const fetchRecommendations = async () => {
-  console.log('Fetching recommendations for trip ID:', route.params.tripId);
-  loadingRecommendations.value = true;
+async function fetchRecommendations() {
+  if (!trip.value.id) return;
   
-  try {
-    // Try to get recommendations from the endpoint
-    const response = await fetch(`http://localhost:5006/api/recommendations/${route.params.tripId}`);
-    console.log('Recommendations API response status:', response.status);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch recommendations: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log('Raw recommendations data:', data);
-    
-    // Process the data - handle different data structures
-    if (data && data.recommendations && typeof data.recommendations === 'object') {
-      // New structure with nested recommendations object
-      console.log('Using nested recommendations structure');
-      recommendations.value = data.recommendations;
-    } else if (data && data.tripId && data.destination && data.recommendations) {
-      // Structure with trip ID, destination and recommendations
-      console.log('Using recommendations with tripId and destination');
-      recommendations.value = data.recommendations;
-    } else if (data && (
-      data.attractions || 
-      data.activities || 
-      data.restaurants || 
-      data.events || 
-      data.tips
-    )) {
-      // Direct structure with recommendation categories at the top level
-      console.log('Using direct recommendations structure');
-      recommendations.value = data;
-    } else if (Array.isArray(data) && data.length > 0) {
-      // Array of recommendation objects
-      console.log('Using array of recommendations');
-      recommendations.value = data;
-    } else {
-      console.warn('Unexpected recommendations data format, using fallback data');
-      // Use example data for development
-    }
-    
-    // Log what was actually set
-    console.log('Final recommendations data after processing:', recommendations.value);
-    
-  } catch (error) {
-    console.error("Error fetching recommendations:", error);
-    // Fallback to example data for development purposes
-  } finally {
-    loadingRecommendations.value = false;
-  }
-};
+  loadingRecommendations.value = true;
+  let retries = 0;
+  const maxRetries = 10;
+  const retryDelay = 3000; // 3 seconds
 
+  const tryFetch = async () => {
+    try {
+      const response = await fetch(`http://localhost:5002/api/recommendations/${trip.value.id}`);
+      
+      if (response.status === 404) {
+        // If recommendations don't exist yet, request them
+        if (retries === 0) {
+          const createResponse = await fetch(`http://localhost:5002/api/recommendations`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              trip_id: trip.value.id,
+              destination: trip.value.city,
+              start_date: trip.value.start_date.split('T')[0],
+              end_date: trip.value.end_date.split('T')[0]
+            })
+          });
+          
+          if (!createResponse.ok) {
+            throw new Error('Failed to request recommendations');
+          }
+        }
+        
+        // If we haven't exceeded max retries, try again after delay
+        if (retries < maxRetries) {
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          return tryFetch();
+        } else {
+          throw new Error('Recommendations not ready after maximum retries');
+        }
+      } else if (!response.ok) {
+        throw new Error('Failed to fetch recommendations');
+      }
+      
+      const data = await response.json();
+      recommendations.value = data.recommendations;
+      loadingRecommendations.value = false;
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+      loadingRecommendations.value = false;
+      showNotification('Failed to fetch recommendations. Please try again later.', 'error');
+    }
+  };
 
-const fetchItinerary = async () => {
+  await tryFetch();
+}
+
+async function fetchItinerary() {
   try {
-    console.log("Fetching itinerary for trip ID:", route.params.tripId);
     const response = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}`);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch itinerary: ${errorText}`);
+      throw new Error('Failed to fetch itinerary');
     }
     
     const data = await response.json();
-    console.log("Raw itinerary data from API:", data);
     
     // Get the daily activities - handle both formats ("dailyActivities" or "daily_activities")
     let dailyActivities = {};
@@ -390,8 +390,6 @@ const fetchItinerary = async () => {
     } else if (data.daily_activities) {
       dailyActivities = data.daily_activities;
     }
-    
-    console.log("Extracted daily activities:", dailyActivities);
     
     // Transform the API response into the expected format for the UI
     const formattedItinerary = [];
@@ -409,25 +407,20 @@ const fetchItinerary = async () => {
               location: activity.location || ""
             }))
           });
-        } else {
-          console.warn(`No activities found for date ${date}`);
         }
       });
       
       // Sort by date
       formattedItinerary.sort((a, b) => new Date(a.date) - new Date(b.date));
-      console.log("Formatted itinerary for UI:", formattedItinerary);
-    } else {
-      console.log("No daily activities found in the itinerary data");
     }
     
     // Update itinerary state
     itinerary.value = formattedItinerary;
   } catch (error) {
     console.error("Error fetching itinerary:", error);
-    showNotification(`Error loading itinerary: ${error.message}`, 'error');
+    showNotification('Failed to load itinerary. Please try again later.', 'error');
   }
-};
+}
 
 const refreshData = async () => {
   await Promise.all([
@@ -446,7 +439,7 @@ const addToItinerary = async (item) => {
       },
       body: JSON.stringify({
         recommendation_id: item.id,
-        date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
+        date: new Date().toISOString().split('T')[0],
         time: "12:00",
         end_time: "14:00"
       }),
@@ -456,6 +449,7 @@ const addToItinerary = async (item) => {
     await fetchItinerary();
   } catch (error) {
     console.error("Error adding activity to itinerary:", error);
+    showNotification('Failed to add activity to itinerary. Please try again later.', 'error');
   }
 };
 
@@ -504,7 +498,6 @@ const editActivity = (dayIndex, activityIndex) => {
 
 const removeActivity = async (dayIndex, activityIndex) => {
   try {
-    // Get the actual day from formattedItinerary
     const dayDate = formattedItinerary.value[dayIndex].date;
     const actualDayIndex = itinerary.value.findIndex(day => day.date === dayDate);
     
@@ -530,6 +523,7 @@ const removeActivity = async (dayIndex, activityIndex) => {
     await fetchItinerary();
   } catch (error) {
     console.error("Error removing activity:", error);
+    showNotification('Failed to remove activity. Please try again later.', 'error');
   }
 };
 
@@ -539,13 +533,12 @@ const saveActivity = async () => {
       name: newActivity.value.description,
       date: itinerary.value[currentDayIndex.value].date,
       time: newActivity.value.time,
-      end_time: newActivity.value.time.split(':')[0] + ':' + (parseInt(newActivity.value.time.split(':')[1]) + 30).toString().padStart(2, '0'), // Default to 30 min activity
+      end_time: newActivity.value.time.split(':')[0] + ':' + (parseInt(newActivity.value.time.split(':')[1]) + 30).toString().padStart(2, '0'),
       location: newActivity.value.location,
       description: newActivity.value.description
     };
 
     if (isEditing.value) {
-      // First delete the existing activity
       const deleteResponse = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}/activities`, {
         method: 'DELETE',
         headers: {
@@ -560,7 +553,6 @@ const saveActivity = async () => {
       
       if (!deleteResponse.ok) throw new Error('Failed to update activity');
       
-      // Then add the updated activity
       const addResponse = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}/activities`, {
         method: 'PUT',
         headers: {
@@ -586,6 +578,7 @@ const saveActivity = async () => {
     await fetchItinerary();
   } catch (error) {
     console.error("Error saving activity:", error);
+    showNotification('Failed to save activity. Please try again later.', 'error');
   }
 };
 
@@ -696,7 +689,7 @@ async function addRecommendationToItinerary(item) {
     console.log("Sending request data:", activityData);
 
     // Call the API
-    const response = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}/add_recommended_activity`, {
+    const addActivityResponse = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}/add_recommended_activity`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -704,10 +697,10 @@ async function addRecommendationToItinerary(item) {
       body: JSON.stringify(activityData)
     });
 
-    const responseData = await response.json();
+    const responseData = await addActivityResponse.json();
     console.log("API response:", responseData);
 
-    if (!response.ok) {
+    if (!addActivityResponse.ok) {
       throw new Error(responseData.error || 'Failed to add recommendation to itinerary');
     }
 
@@ -778,7 +771,7 @@ const saveItinerary = async () => {
     });
     
     // Send to the backend
-    const response = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}`, {
+    const saveResponse = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -786,13 +779,15 @@ const saveItinerary = async () => {
       body: JSON.stringify(itineraryData)
     });
     
-    if (!response.ok) {
+    if (!saveResponse.ok) {
       throw new Error('Failed to save itinerary');
     }
     
     console.log('Itinerary saved successfully');
+    showNotification('Itinerary saved successfully', 'success');
   } catch (error) {
     console.error('Error saving itinerary:', error);
+    showNotification('Failed to save itinerary. Please try again later.', 'error');
   }
 };
 

@@ -85,7 +85,7 @@ def get_recommendations(destination, start_date, end_date):
         # Call OpenAI API
         logger.info("Sending request to OpenAI API")
         response = client.chat.completions.create(
-            model="gpt-4-turbo",
+            model="gpt-4-turbo-preview",
             messages=[
                 {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations in JSON format."},
                 {"role": "user", "content": prompt}

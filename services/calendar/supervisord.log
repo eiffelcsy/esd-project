@@ -509,3 +509,7 @@
 2025-04-06 20:03:58,819 INFO spawned: 'rabbitmq_consumer' with pid 8
 2025-04-06 20:04:00,265 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 2025-04-06 20:04:00,266 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 20:06:13,169 WARN received SIGTERM indicating exit request
+2025-04-06 20:06:13,170 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-06 20:06:13,174 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-06 20:06:13,263 INFO stopped: flask (exit status 0)

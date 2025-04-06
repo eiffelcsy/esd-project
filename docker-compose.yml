@@ -204,15 +204,21 @@ services:
     image: postgres:13
     container_name: itinerary-db
     environment:
+      - POSTGRES_DB=itinerary_db
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=itinerary_db
+      - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
-      - itinerary_postgres_data:/var/lib/postgresql/data/
+      - itinerary_db_data:/var/lib/postgresql/data
     ports:
       - "5437:5432"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # Itinerary microservice
   itinerary:
@@ -227,7 +233,14 @@ services:
       - ./services/itinerary:/app
     restart: unless-stopped
     depends_on:
-      - itinerary-db
+      itinerary-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      recommendation-management:
+        condition: service_started
+      calendar:
+        condition: service_started
     networks:
       - app-network
 
@@ -285,7 +298,7 @@ volumes:
   recommendation_postgres_data:
   calendar_db_data:
   trip_db_data:
-  itinerary_postgres_data:
+  itinerary_db_data:
   finance_postgres_data:
 
 networks:
