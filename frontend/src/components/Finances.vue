@@ -295,7 +295,7 @@ const settlementDetails = ref([]);
 const userBalances = ref({});
 const userNames = ref({});
 const settlementCurrency = ref('SGD');
-const displayCurrency = ref('USD');
+const displayCurrency = ref('SGD');
 
 const newExpense = ref({
   amount: "",
