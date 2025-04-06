@@ -442,6 +442,9 @@ onMounted(async () => {
     // Get groupId from route params
     const groupId = route.params.groupId
     
+    // Call refreshCurrentStep to initialize data
+    await refreshCurrentStep()
+
     // Fetch the calendar for this group
     const calendarResponse = await fetch(`http://localhost:5004/api/calendars/group/${groupId}`);
     if (calendarResponse.ok) {
@@ -462,6 +465,25 @@ onMounted(async () => {
     console.error('Error fetching data on mount:', error);
   }
 });
+
+// Function to refresh data based on current step
+async function refreshCurrentStep() {
+  try {
+    if (currentStep.value === steps.GROUP_AVAILABILITY) {
+      await fetchGroupMembers()
+      calculateAvailabilityHeatmap()
+    } else if (currentStep.value === steps.SELECT_DATES) {
+      calculateAvailabilityHeatmap()
+      findBestDateRanges()
+    } else if (currentStep.value === steps.SELECT_DESTINATION) {
+      // Reset validation state when refreshing
+      isValidDestination.value = false
+      destinationError.value = ''
+    }
+  } catch (error) {
+    console.error('Error refreshing data:', error)
+  }
+}
 
 const allMembersAvailable = computed(() => {
   return groupMembers.value.every(member => member.availability)
@@ -1049,24 +1071,5 @@ function generateDateRange(startDate, endDate) {
 
 function goBackToGroups() {
   router.push({ name: 'groups' });
-}
-
-// Function to refresh data based on current step
-async function refreshCurrentStep() {
-  try {
-    if (currentStep.value === steps.GROUP_AVAILABILITY) {
-      await fetchGroupMembers()
-      calculateAvailabilityHeatmap()
-    } else if (currentStep.value === steps.SELECT_DATES) {
-      calculateAvailabilityHeatmap()
-      findBestDateRanges()
-    } else if (currentStep.value === steps.SELECT_DESTINATION) {
-      // Reset validation state when refreshing
-      isValidDestination.value = false
-      destinationError.value = ''
-    }
-  } catch (error) {
-    console.error('Error refreshing data:', error)
-  }
 }
 </script>
