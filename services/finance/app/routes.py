@@ -84,7 +84,7 @@ def register_routes(app):
             base_currency = request.args.get('base', 'SGD')
 
             stmt = db.select(Expense).where(Expense.trip_id == trip_id)
-            expenses = db.session.scalars(stmt).all()  # Explicit conversion to list
+            expenses = db.session.scalars(stmt).all()  
                 
             if not expenses:
                 return jsonify({
@@ -92,15 +92,18 @@ def register_routes(app):
                     'message': 'No expenses found for this trip',
                     'total_amount': 0,
                     'currency': base_currency
-                }), 200 # Works, but result just means that the database doesn't have any records for the trip
+                }), 200 
             
             # Initialize total amount
             total_amount = 0
+            
             # Get the list of users for a given trip
             users = []
             for e in expenses:
                 if e.user_id not in users:
                     users.append(e.user_id)
+                if e.payee_id and e.payee_id not in users:
+                    users.append(e.payee_id)
                 
             # Convert all expenses to base currency and sum them up
             for expense in expenses:
@@ -115,9 +118,6 @@ def register_routes(app):
                     )
                     total_amount += converted_amount
             
-            # Split the expenses by person
-            split_details = {}
-            
             # Get user names/emails from the UserReadiness model for better display
             users_info = {}
             try:
@@ -131,51 +131,93 @@ def register_routes(app):
             except Exception as e:
                 print(f"Error getting user readiness records: {str(e)}")
                 
-            for u in users:
-                user_expenditure = 0 # Initialize total amount spent by the user
-                descriptions = [] # Initialize the descriptions of user expenditures
-                user_name = users_info.get(u, {}).get('name', f"User {u}")
-
-                for e in expenses:
-                    if e.user_id == u:
-                        # Add the user's expenditure to the user's running total
-                        if e.base_currency == base_currency:
-                            user_expenditure += e.amount
-                        else:
-                            # Convert to base currency using your ExchangeRateClient
-                            converted_amount = ExchangeRateClient.convert_amount(
-                                from_currency=e.base_currency,
-                                to_currency=base_currency,
-                                amount=e.amount
-                            )
-                            user_expenditure += converted_amount
-                        
-                        # Add user expenditure description
-                        descriptions.append(e.description)
-
-                        split_details[u] = {
-                            'user_name': user_name,
-                            'total_spent': round(user_expenditure, 2),
-                            'descriptions': descriptions
-                        }
-
-                        # Show the split amount to be paid by other users (total amount split between all users in a trip)
-                        payers = [{'id': user, 'name': users_info.get(user, {}).get('name', f"User {user}")}
-                                 for user in users if user != u]
-                        
-                        split_details[u].update({
-                            'split_amount': round((user_expenditure/(len(users))), 2),
-                            'payers': [p['id'] for p in payers],
-                            'payer_names': [p['name'] for p in payers]
-                        })
-
-            return jsonify({
+            # Create balance sheet to track how much each user has spent and owes
+            balances = {user_id: 0 for user_id in users}
+            
+            # Calculate each user's expenditure and who they paid for
+            for expense in expenses:
+                # Convert amount to base currency if needed
+                if expense.base_currency == base_currency:
+                    amount = expense.amount
+                else:
+                    amount = ExchangeRateClient.convert_amount(
+                        from_currency=expense.base_currency,
+                        to_currency=base_currency,
+                        amount=expense.amount
+                    )
+                
+                # If expense has a specific payee, it means the payer (user_id) paid for the payee
+                if expense.payee_id and expense.payee_id != 'all':
+                    # Increase payer's balance (they are owed money)
+                    balances[expense.user_id] += amount
+                    # Decrease payee's balance (they owe money)
+                    balances[expense.payee_id] -= amount
+                else:
+                    # If no specific payee or payee_id is 'all', split among all users evenly
+                    payer_share = amount / len(users)
+                    # The payer paid the full amount but only owes their share
+                    balances[expense.user_id] += amount - payer_share
+                    
+                    # Everyone else owes their share to the payer
+                    for user_id in users:
+                        if user_id != expense.user_id:
+                            balances[user_id] -= payer_share
+            
+            # Create settlement plan - who pays whom
+            settlements = []
+            # Sort users by balance (negative balances owe money, positive are owed money)
+            sorted_users = sorted(users, key=lambda u: balances[u])
+            
+            # Simple approach: users with negative balances pay to users with positive balances
+            i, j = 0, len(sorted_users) - 1
+            while i < j:
+                debtor = sorted_users[i]  # User who owes money (negative balance)
+                creditor = sorted_users[j]  # User who is owed money (positive balance)
+                
+                if abs(balances[debtor]) < 0.01 or abs(balances[creditor]) < 0.01:
+                    # Skip users with negligible balances
+                    if abs(balances[debtor]) < 0.01:
+                        i += 1
+                    if abs(balances[creditor]) < 0.01:
+                        j -= 1
+                    continue
+                
+                # Amount to transfer is the minimum of what debtor owes and creditor is owed
+                amount = min(abs(balances[debtor]), balances[creditor])
+                
+                if amount > 0:
+                    # Create a settlement transaction
+                    settlements.append({
+                        'from': debtor,
+                        'from_name': users_info.get(debtor, {}).get('name', f"User {debtor}"),
+                        'to': creditor,
+                        'to_name': users_info.get(creditor, {}).get('name', f"User {creditor}"),
+                        'amount': round(amount, 2),
+                        'currency': base_currency
+                    })
+                
+                    # Update balances
+                    balances[debtor] += amount
+                    balances[creditor] -= amount
+                
+                # Move pointers if balances are settled
+                if abs(balances[debtor]) < 0.01:
+                    i += 1
+                if abs(balances[creditor]) < 0.01:
+                    j -= 1
+            
+            # Prepare response with settlement details
+            response_data = {
                 'trip_id': trip_id,
-                'total_amount': round(total_amount, 2),  # Round to 2 decimal places
+                'total_amount': round(total_amount, 2),
                 'currency': base_currency,
                 'users': len(users),
-                'split_details': split_details 
-            }), 200
+                'user_balances': {user_id: round(balance, 2) for user_id, balance in balances.items()},
+                'user_names': {user_id: users_info.get(user_id, {}).get('name', f"User {user_id}") for user_id in users},
+                'settlements': settlements
+            }
+            
+            return jsonify(response_data), 200
                 
         except Exception as e:
             return jsonify({'error': str(e)}), 400
@@ -189,6 +231,10 @@ def register_routes(app):
             missing_fields = [field for field in required_fields if field not in data]
             if missing_fields:
                 return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+
+            # Ensure payee_id is present in data even if null
+            if 'payee_id' not in data:
+                data['payee_id'] = None
 
             try:
                 new_expense = Expense(**data)
@@ -426,7 +472,7 @@ def register_routes(app):
             return len(result['success']) > 0
             
         except Exception as e:
-            print(f"Error sending settlement email: {str(e)}")
+            logger.error(f"Error sending settlement email: {str(e)}")
             return False
 
     # Get all trips for a user
@@ -483,3 +529,81 @@ def register_routes(app):
             return jsonify({
                 'error': str(e)
             }), 500 
+
+    # Test endpoint to manually trigger a settlement email for a specific user
+    @app.route('/api/finance/test-email/<trip_id>/<user_id>', methods=['GET'])
+    def test_settlement_email(trip_id, user_id):
+        try:
+            # Get settlement details
+            settlement_response = get_all_expenses(trip_id)
+            
+            if not settlement_response or not hasattr(settlement_response, '__getitem__') or settlement_response[1] != 200:
+                return jsonify({
+                    'error': 'Could not calculate settlement'
+                }), 500
+            
+            settlement_data = settlement_response[0].json
+            
+            # Get user readiness record
+            stmt = db.select(UserReadiness).where(UserReadiness.trip_id == trip_id, UserReadiness.user_id == user_id)
+            user = db.session.scalars(stmt).first()
+            
+            if not user:
+                return jsonify({
+                    'error': f'User {user_id} not found for trip {trip_id}'
+                }), 404
+            
+            # Prepare user-specific settlement details
+            to_pay = []
+            if 'settlements' in settlement_data:
+                for settlement in settlement_data['settlements']:
+                    if settlement['from'] == user_id:
+                        # This user needs to pay
+                        to_pay.append({
+                            'to': settlement['to_name'],
+                            'amount': settlement['amount'],
+                            'currency': settlement['currency']
+                        })
+            
+            # Get what others need to pay this user
+            to_receive = []
+            if 'settlements' in settlement_data:
+                for settlement in settlement_data['settlements']:
+                    if settlement['to'] == user_id:
+                        # This user will receive payment
+                        to_receive.append({
+                            'from': settlement['from_name'],
+                            'amount': settlement['amount'],
+                            'currency': settlement['currency']
+                        })
+            
+            # Get overall user balance
+            user_balance = settlement_data.get('user_balances', {}).get(user_id, 0)
+            
+            # Prepare email content
+            email_body = {
+                'trip_id': trip_id,
+                'user_name': user.name,
+                'total_trip_amount': settlement_data.get('total_amount', 0),
+                'currency': settlement_data.get('currency', 'SGD'),
+                'user_balance': user_balance,
+                'to_pay': to_pay,
+                'to_receive': to_receive
+            }
+            
+            # Send email
+            response = EmailClient.send_settlement_email(
+                to_email=user.email,
+                subject=f'Trip Settlement Details for Trip #{trip_id} (TEST)',
+                body=email_body
+            )
+            
+            return jsonify({
+                'message': 'Settlement email sent',
+                'email_result': response,
+                'email_content': email_body
+            }), 200
+            
+        except Exception as e:
+            logger.error(f"Error sending test settlement email: {str(e)}")
+            return jsonify({'error': str(e)}), 500 

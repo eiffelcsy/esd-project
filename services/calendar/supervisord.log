@@ -366,3 +366,46 @@
 2025-04-04 13:09:51,832 INFO spawned: 'rabbitmq_consumer' with pid 8
 2025-04-04 13:09:52,842 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 2025-04-04 13:09:52,842 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-04 13:35:34,400 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-04 13:35:34,402 INFO supervisord started with pid 1
+2025-04-04 13:35:35,405 INFO spawned: 'flask' with pid 7
+2025-04-04 13:35:35,407 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-04 13:35:37,388 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-04 13:35:37,388 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 08:41:51,038 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-06 08:41:51,043 INFO supervisord started with pid 1
+2025-04-06 08:41:52,047 INFO spawned: 'flask' with pid 7
+2025-04-06 08:41:52,054 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-06 08:41:53,056 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 08:41:53,056 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 08:41:57,491 WARN exited: flask (exit status 1; not expected)
+2025-04-06 08:41:58,495 INFO spawned: 'flask' with pid 9
+2025-04-06 08:41:59,172 WARN exited: flask (exit status 1; not expected)
+2025-04-06 08:42:00,174 INFO spawned: 'flask' with pid 10
+2025-04-06 08:42:00,683 WARN exited: flask (exit status 1; not expected)
+2025-04-06 08:42:02,685 INFO spawned: 'flask' with pid 11
+2025-04-06 08:42:03,950 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 08:59:46,831 WARN received SIGTERM indicating exit request
+2025-04-06 08:59:46,832 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-06 08:59:46,835 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-06 08:59:46,929 INFO stopped: flask (exit status 0)
+2025-04-06 09:03:14,639 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-06 09:03:14,642 INFO supervisord started with pid 1
+2025-04-06 09:03:15,644 INFO spawned: 'flask' with pid 7
+2025-04-06 09:03:15,647 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-06 09:03:17,568 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 09:03:17,569 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 09:18:50,618 WARN received SIGTERM indicating exit request
+2025-04-06 09:18:50,619 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-06 09:18:50,623 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-06 09:18:50,708 INFO stopped: flask (exit status 0)
+2025-04-06 09:20:12,043 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2025-04-06 09:20:12,046 INFO supervisord started with pid 1
+2025-04-06 09:20:14,895 INFO spawned: 'flask' with pid 7
+2025-04-06 09:20:14,896 INFO spawned: 'rabbitmq_consumer' with pid 8
+2025-04-06 09:20:16,887 INFO success: flask entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 09:20:16,887 INFO success: rabbitmq_consumer entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2025-04-06 09:32:26,725 WARN received SIGTERM indicating exit request
+2025-04-06 09:32:26,725 INFO waiting for flask, rabbitmq_consumer to die
+2025-04-06 09:32:26,729 WARN stopped: rabbitmq_consumer (terminated by SIGTERM)
+2025-04-06 09:32:26,809 INFO stopped: flask (exit status 0)

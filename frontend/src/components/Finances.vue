@@ -69,6 +69,35 @@
                 />
               </div>
             </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <Label for="payer">Paid by</Label>
+                <Select v-model="newExpense.user_id">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="member in groupMembers" :key="member.id" :value="member.id">
+                      {{ member.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-2">
+                <Label for="payee">Paid for</Label>
+                <Select v-model="newExpense.payee_id">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payee (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Everyone (Split equally)</SelectItem>
+                    <SelectItem v-for="member in groupMembers" :key="member.id" :value="member.id">
+                      {{ member.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div class="space-y-2">
               <Label for="category">Category</Label>
               <Select v-model="newExpense.category">
@@ -113,8 +142,13 @@
                   </p>
                 </div>
               </div>
-              <div class="mt-2 text-sm text-gray-500">
-                Added by User {{ expense.addedBy }} on {{ formatDate(expense.date) }}
+              <div class="mt-2 flex justify-between items-center text-sm text-gray-500">
+                <div>
+                  Added by User {{ expense.addedBy }} on {{ formatDate(expense.date) }}
+                </div>
+                <div v-if="expense.payee">
+                  <span class="font-medium">Paid for:</span> {{ expense.payee }}
+                </div>
               </div>
             </div>
           </div>
@@ -172,14 +206,26 @@
           </DialogDescription>
         </DialogHeader>
         <div class="space-y-4">
-          <div v-for="settlement in settlementDetails" :key="settlement.from" class="border rounded-lg p-4">
+          <div v-if="settlementDetails.length === 0" class="text-center py-4 text-gray-500">
+            No settlements needed. Everyone is even!
+          </div>
+          <div v-for="settlement in settlementDetails" :key="`${settlement.from}-${settlement.to}`" class="border rounded-lg p-4">
             <div class="flex justify-between items-center">
               <div>
-                <p class="font-medium">{{ settlement.from }}</p>
-                <p class="text-sm text-gray-600">pays to {{ settlement.to }}</p>
+                <p class="font-medium">{{ settlement.from_name }}</p>
+                <p class="text-sm text-gray-600">pays to {{ settlement.to_name }}</p>
               </div>
               <p class="font-semibold">{{ settlement.amount }} {{ settlement.currency }}</p>
             </div>
+          </div>
+        </div>
+        <div v-if="userBalances" class="mt-4 border-t pt-4">
+          <h3 class="font-semibold mb-2">Balance Summary</h3>
+          <div v-for="(balance, userId) in userBalances" :key="userId" class="flex justify-between items-center py-1">
+            <span>{{ userNames[userId] || `User ${userId}` }}</span>
+            <span :class="balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-gray-600'">
+              {{ balance > 0 ? '+' : '' }}{{ balance }} {{ settlementCurrency }}
+            </span>
           </div>
         </div>
       </DialogContent>
@@ -204,12 +250,17 @@ const groupMembers = ref([]);
 const currentUserId = ref(null);
 const showSettlementModal = ref(false);
 const settlementDetails = ref([]);
+const userBalances = ref({});
+const userNames = ref({});
+const settlementCurrency = ref('SGD');
 
 const newExpense = ref({
   amount: "",
   currency: "",
   description: "",
   category: "",
+  user_id: "",
+  payee_id: "all",
 });
 
 const allMembersReady = computed(() => {
@@ -232,8 +283,8 @@ const fetchTripDetails = async () => {
 
 const fetchExpenses = async () => {
   try {
-    // Use the finance service endpoint instead of the expenses endpoint
-    const response = await fetch(`http://localhost:5008/api/finance/expenses/${route.params.tripId}`);
+    // Use the expense-management service endpoint to get expenses
+    const response = await fetch(`http://localhost:5007/api/expenses/${route.params.tripId}`);
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
@@ -247,6 +298,9 @@ const fetchExpenses = async () => {
       amountUSD: expense.amount, // This would need proper conversion
       category: expense.category || "Other",
       addedBy: expense.user_id,
+      payee: expense.payee_id === 'all' ? 'Everyone' : (
+        expense.payee_id ? groupMembers.value.find(m => String(m.id) === String(expense.payee_id))?.name || `User ${expense.payee_id}` : 'Everyone'
+      ),
       date: expense.date,
       location: expense.location,
       is_paid: expense.is_paid
@@ -283,40 +337,28 @@ const fetchGroupMembers = async () => {
 
 const addExpense = async () => {
   try {
-    // Get user ID from stored user object
-    let userId = null;
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const userObj = JSON.parse(storedUser);
-        userId = userObj.id;
-      } catch (e) {
-        console.error("Error parsing user from localStorage", e);
-      }
+    // Check if user_id is set, if not use the current user's ID
+    if (!newExpense.value.user_id) {
+      newExpense.value.user_id = currentUserId.value;
     }
 
-    // Use fallback if needed
-    if (!userId) {
-      userId = localStorage.getItem('userId') || currentUserId.value || '1';
-      console.warn('Using fallback userId:', userId);
-    }
-
-    // Format the expense data for the finance service
+    // Format the expense data for the expense management service
     const expenseData = {
       trip_id: String(route.params.tripId), // Convert to string to match DB column type
-      user_id: String(userId), // Convert to string to match DB column type
+      user_id: String(newExpense.value.user_id), // Use selected payer or current user
       date: new Date().toISOString().split("T")[0], // Current date in YYYY-MM-DD format
       location: trip.value.city || "Unknown",
       amount: parseFloat(newExpense.value.amount),
       base_currency: newExpense.value.currency || "SGD",
       description: newExpense.value.description,
       is_paid: false,
-      category: newExpense.value.category
+      category: newExpense.value.category,
+      payee_id: newExpense.value.payee_id === "all" ? null : String(newExpense.value.payee_id)
     };
 
     console.log('Sending expense data:', expenseData);
-    // Use the finance service endpoint to add expenses
-    const response = await fetch(`http://localhost:5008/api/finance/${route.params.tripId}/add`, {
+    // Use the expense-management service instead of finance service directly
+    const response = await fetch('http://localhost:5007/api/expenses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -334,6 +376,8 @@ const addExpense = async () => {
       currency: trip.value.localCurrency,
       description: "",
       category: "",
+      user_id: currentUserId.value,
+      payee_id: "all",
     };
     await fetchExpenses();
   } catch (error) {
@@ -412,32 +456,15 @@ const calculateSettlement = async () => {
     }
     
     const data = await response.json();
-    settlementDetails.value = [];
     
-    if (data.split_details) {
-      // Process each user who is owed money and who they need to collect from
-      Object.entries(data.split_details).forEach(([receiverId, details]) => {
-        if (details.payers && details.payers.length > 0) {
-          // For each user who owes money to this receiver
-          details.payers.forEach(payerId => {
-            // Get names for display
-            const payerName = details.payer_names 
-              ? details.payer_names[details.payers.indexOf(payerId)] 
-              : groupMembers.value.find(m => String(m.id) === String(payerId))?.name || `User ${payerId}`;
-            
-            const receiverName = details.user_name || 
-              groupMembers.value.find(m => String(m.id) === String(receiverId))?.name || `User ${receiverId}`;
-            
-            settlementDetails.value.push({
-              from: payerName,
-              to: receiverName,
-              amount: details.split_amount || 0,
-              currency: data.currency || 'SGD'
-            });
-          });
-        }
-      });
-    }
+    // Store the settlements data
+    settlementDetails.value = data.settlements || [];
+    
+    // Store user balances and names for display
+    userBalances.value = data.user_balances || {};
+    userNames.value = data.user_names || {};
+    settlementCurrency.value = data.currency || 'SGD';
+    
   } catch (error) {
     console.error("Error calculating settlement:", error);
   }
@@ -476,6 +503,9 @@ onMounted(() => {
     currentUserId.value = "1";
     console.warn("Using default user ID: 1");
   }
+  
+  // Initialize newExpense with the current user ID
+  newExpense.value.user_id = currentUserId.value;
   
   fetchTripDetails();
   fetchGroupMembers();
