@@ -37,21 +37,45 @@ def get_recommendations(destination, start_date, end_date):
     # Initialize the OpenAI client within this function
     client = get_openai_client()
     if not client:
-        logger.error("Failed to initialize OpenAI client, returning error response")
-        return {
-            "error": "OpenAI API key not configured properly",
-            "attractions": [],
-            "restaurants": [],
-            "activities": [],
-            "events": [],
-            "tips": ["OpenAI API is not configured properly. Please check your environment variables."]
-        }
+        logger.error("Failed to initialize OpenAI client, returning fallback recommendations")
+        return get_fallback_recommendations(destination)
 
     # Calculate trip duration
     trip_duration = (end_date - start_date).days + 1
     
-    # Create prompt for OpenAI
-    prompt = f"""
+    try:
+        # Call OpenAI API
+        logger.info("Sending request to OpenAI API")
+        response = client.chat.completions.create(
+            model="gpt-4-turbo-preview",
+            messages=[
+                {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations in JSON format."},
+                {"role": "user", "content": create_prompt(destination, start_date, end_date, trip_duration)}
+            ],
+            temperature=0.7,
+            max_tokens=800
+        )
+        
+        # Extract and parse the response
+        result = response.choices[0].message.content
+        logger.info("Received response from OpenAI API")
+        
+        # Clean up the response to ensure it's valid JSON
+        result = result.replace("```json", "").replace("```", "").strip()
+        
+        try:
+            recommendations = json.loads(result)
+            logger.info("Successfully parsed OpenAI response")
+            return recommendations
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI response: {e}")
+            return get_fallback_recommendations(destination)
+    except Exception as e:
+        logger.error(f"Error calling OpenAI API: {e}")
+        return get_fallback_recommendations(destination)
+
+def create_prompt(destination, start_date, end_date, trip_duration):
+    return f"""
     Create a detailed travel recommendation for a trip to {destination} from {start_date} to {end_date} ({trip_duration} days).
     
     Please provide:
@@ -80,44 +104,50 @@ def get_recommendations(destination, start_date, end_date):
         ]
     }}
     """
-    
-    try:
-        # Call OpenAI API
-        logger.info("Sending request to OpenAI API")
-        response = client.chat.completions.create(
-            model="gpt-4-turbo-preview",
-            messages=[
-                {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations in JSON format."},
-                {"role": "user", "content": prompt}
+
+def get_fallback_recommendations(destination):
+    """Provide static recommendations when OpenAI API is unavailable"""
+    city_recommendations = {
+        "Tokyo": {
+            "attractions": [
+                {"name": "Senso-ji Temple", "description": "Ancient Buddhist temple in Asakusa", "suggested_day": "1"},
+                {"name": "Shibuya Crossing", "description": "World's busiest pedestrian crossing", "suggested_day": "1"},
+                {"name": "Meiji Shrine", "description": "Serene Shinto shrine in a forest", "suggested_day": "2"},
+                {"name": "Tokyo Skytree", "description": "Tallest structure in Japan with observation decks", "suggested_day": "2"},
+                {"name": "Tsukiji Outer Market", "description": "Famous market with fresh seafood", "suggested_day": "3"}
             ],
-            temperature=0.7,
-            max_tokens=800
-        )
-        
-        # Extract and parse the response
-        result = response.choices[0].message.content
-        logger.info("Received response from OpenAI API")
-        
-        # Clean up the response to ensure it's valid JSON
-        # Remove any markdown code block syntax and trim whitespace
-        result = result.replace("```json", "").replace("```", "").strip()
-        
-        try:
-            # Parse the JSON response
-            recommendations = json.loads(result)
-            logger.info("Successfully parsed OpenAI response")
-            return recommendations
-        except json.JSONDecodeError as e:
-            # If parsing fails, return a simple error object
-            logger.error(f"Failed to parse OpenAI response: {e}")
-            return {"error": "Failed to parse recommendations", "raw_response": result}
-    except Exception as e:
-        logger.error(f"Error calling OpenAI API: {e}")
+            "restaurants": [
+                {"name": "Sushi Dai", "cuisine": "Sushi", "price_range": "$$$"},
+                {"name": "Ichiran Ramen", "cuisine": "Ramen", "price_range": "$$"},
+                {"name": "Gonpachi Nishi-Azabu", "cuisine": "Japanese", "price_range": "$$"}
+            ],
+            "activities": [
+                {"name": "Teamlab Borderless", "description": "Digital art museum", "suggested_day": "any"},
+                {"name": "Yanaka Ginza", "description": "Traditional shopping street", "suggested_day": "any"}
+            ],
+            "events": [],
+            "tips": [
+                "Get a PASMO or Suica card for easy public transportation",
+                "Many places are cash-only",
+                "Download offline maps as some areas have limited connectivity"
+            ]
+        }
+    }
+    
+    # Return default recommendations if city not found
+    if destination not in city_recommendations:
         return {
-            "error": f"Failed to get recommendations from OpenAI: {str(e)}",
-            "attractions": [],
+            "attractions": [
+                {"name": "Unable to provide specific recommendations", "description": "OpenAI API is currently unavailable", "suggested_day": "any"}
+            ],
             "restaurants": [],
             "activities": [],
             "events": [],
-            "tips": [f"Error: {str(e)}"]
-        } 
+            "tips": [
+                "OpenAI API is currently unavailable",
+                "Please try again later or check with local tourism websites",
+                "Consider using Google Maps or TripAdvisor for current recommendations"
+            ]
+        }
+    
+    return city_recommendations[destination] 
