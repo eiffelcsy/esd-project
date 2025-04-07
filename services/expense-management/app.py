@@ -3,7 +3,8 @@ import requests
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
+# Enable CORS for all routes with all origins
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 @app.route('/api/expenses', methods=['POST'])
 def add_expense():
@@ -56,6 +57,51 @@ def get_trip_expenses(trip_id):
         return jsonify({'error': f"Error communicating with finance service: {str(e)}"}), 501
     except Exception as e:
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/expenses/convert/<string:from_currency>/<string:to_currency>/<float:amount>', methods=['GET'])
+def convert_currency(from_currency, to_currency, amount):
+    """Convert currency using the finance service."""
+    try:
+        print(f"Attempting currency conversion: {from_currency} to {to_currency}, amount: {amount}")
+        # Forward the conversion request to the Finance service
+        response = requests.get(
+            f"http://finance:5008/api/finance/convert/{from_currency}/{to_currency}/{amount}",
+            timeout=5
+        )
+        print(f"Finance service response status: {response.status_code}")
+        response.raise_for_status()
+        result = response.json()
+        print(f"Conversion result: {result}")
+
+        # Ensure we return in the expected format
+        if isinstance(result, dict) and 'rate' in result:
+            return jsonify(result), 200
+        elif isinstance(result, dict) and 'error' in result:
+            return jsonify(result), 400
+        else:
+            # If the response doesn't contain a rate, create one
+            return jsonify({
+                'rate': float(result) if isinstance(result, (int, float, str)) else 1.0,
+                'from': from_currency,
+                'to': to_currency
+            }), 200
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error communicating with finance service: {str(e)}")
+        return jsonify({
+            'error': f"Error communicating with finance service: {str(e)}",
+            'rate': 1.0,  # Fallback rate
+            'from': from_currency,
+            'to': to_currency
+        }), 200  # Return 200 with fallback rate instead of error
+    except Exception as e:
+        print(f"Unexpected error in currency conversion: {str(e)}")
+        return jsonify({
+            'error': f"An error occurred: {str(e)}",
+            'rate': 1.0,  # Fallback rate
+            'from': from_currency,
+            'to': to_currency
+        }), 200  # Return 200 with fallback rate instead of error
 
 @app.route('/health', methods=['GET'])
 def health_check():

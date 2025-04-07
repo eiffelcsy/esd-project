@@ -1,88 +1,232 @@
 # Trip Management Service
 
-This service is responsible for managing trips in the travel planning application. It acts as a composite service that coordinates between various other microservices to handle trip creation, itinerary management, and travel recommendations.
+The Trip Management Service handles the creation and management of trip details. It acts as a central service that coordinates with other services such as Itinerary Service to create comprehensive travel plans.
 
-## Features
+## Endpoints
 
-- Create and manage trips
-- Coordinate with itinerary service for trip planning
-- Integrate with recommendation service for travel suggestions
-- Handle both HTTP and AMQP communication
-
-## Architecture
-
-The service follows a microservices architecture and communicates with other services via:
-- HTTP REST APIs for synchronous communication
-- RabbitMQ for asynchronous message-based communication
-
-## Prerequisites
-
-- Python 3.8+
-- PostgreSQL
-- RabbitMQ
-
-## Environment Variables
-
-Create a `.env` file with the following variables:
+### Health Check
 
 ```
-DATABASE_URL=postgresql://postgres:postgres@db:5432/trip_db
-RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-PORT=5001
+GET /health
 ```
 
-## Installation
+Returns the service health status.
 
-1. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "trip-management"
+}
+```
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Create Trip
 
-## Running the Service
+```
+POST /api/trips
+```
 
-1. Start the service:
-   ```bash
-   python app.py
-   ```
+Creates a new trip and initiates the creation of an associated itinerary.
 
-2. The service will be available at `http://localhost:5001`
+**Request:**
+```json
+{
+  "user_id": 1,
+  "city": "Paris",
+  "start_date": "2023-07-01T00:00:00Z",
+  "end_date": "2023-07-08T00:00:00Z",
+  "group_id": 2
+}
+```
 
-## API Endpoints
+**Response:**
+```json
+{
+  "id": 1,
+  "user_id": 1,
+  "city": "Paris",
+  "start_date": "2023-07-01T00:00:00Z",
+  "end_date": "2023-07-08T00:00:00Z",
+  "group_id": 2,
+  "itinerary_id": 1,
+  "created_at": "2023-06-15T12:30:45",
+  "updated_at": "2023-06-15T12:30:45"
+}
+```
 
-### HTTP Endpoints
+### Get Trip
 
-- `GET /health` - Health check endpoint
-- `POST /trips` - Create a new trip
-- `GET /trips/<trip_id>` - Get trip details
-- `GET /users/<user_id>/trips` - Get all trips for a user
-- `PUT /trips/<trip_id>/itinerary` - Update trip itinerary
+```
+GET /api/trips/{trip_id}
+```
 
-### Message Queue Topics
+Retrieves details for a specific trip.
 
-- Consumes from: `trip_queue` - For trip creation requests
-- Publishes to: `recommendation_queue` - For recommendation requests
+**Response:**
+```json
+{
+  "id": 1,
+  "user_id": 1,
+  "city": "Paris",
+  "start_date": "2023-07-01T00:00:00Z",
+  "end_date": "2023-07-08T00:00:00Z",
+  "group_id": 2,
+  "itinerary_id": 1,
+  "created_at": "2023-06-15T12:30:45",
+  "updated_at": "2023-06-15T12:30:45"
+}
+```
 
-## Testing
+### Get User Trips
 
-Run the tests using:
+```
+GET /api/users/{user_id}/trips
+```
+
+Retrieves all trips for a specific user.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "user_id": 1,
+    "city": "Paris",
+    "start_date": "2023-07-01T00:00:00Z",
+    "end_date": "2023-07-08T00:00:00Z",
+    "group_id": 2,
+    "itinerary_id": 1,
+    "created_at": "2023-06-15T12:30:45",
+    "updated_at": "2023-06-15T12:30:45"
+  },
+  {
+    "id": 2,
+    "user_id": 1,
+    "city": "Rome",
+    "start_date": "2023-08-15T00:00:00Z",
+    "end_date": "2023-08-22T00:00:00Z",
+    "group_id": null,
+    "itinerary_id": 2,
+    "created_at": "2023-06-20T09:45:30",
+    "updated_at": "2023-06-20T09:45:30"
+  }
+]
+```
+
+### Get Group Trips
+
+```
+GET /api/groups/{group_id}/trips
+```
+
+Retrieves all trips associated with a specific group.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "user_id": 1,
+    "city": "Paris",
+    "start_date": "2023-07-01T00:00:00Z",
+    "end_date": "2023-07-08T00:00:00Z",
+    "group_id": 2,
+    "itinerary_id": 1,
+    "created_at": "2023-06-15T12:30:45",
+    "updated_at": "2023-06-15T12:30:45"
+  },
+  {
+    "id": 3,
+    "user_id": 2,
+    "city": "Barcelona",
+    "start_date": "2023-09-10T00:00:00Z",
+    "end_date": "2023-09-17T00:00:00Z",
+    "group_id": 2,
+    "itinerary_id": 3,
+    "created_at": "2023-06-25T14:20:15",
+    "updated_at": "2023-06-25T14:20:15"
+  }
+]
+```
+
+### Update Trip Itinerary
+
+```
+PUT /api/trips/{trip_id}/itinerary
+```
+
+Updates the itinerary associated with a trip.
+
+**Request:**
+```json
+{
+  "activities": [
+    {
+      "name": "Eiffel Tower Visit",
+      "date": "2023-07-02",
+      "time": "10:00",
+      "end_time": "12:00",
+      "location": "Eiffel Tower, Paris"
+    },
+    {
+      "name": "Louvre Museum Tour",
+      "date": "2023-07-03",
+      "time": "14:00",
+      "end_time": "17:00",
+      "location": "Louvre Museum, Paris"
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Itinerary updated successfully"
+}
+```
+
+### Delete Trip
+
+```
+DELETE /api/trips/{trip_id}
+```
+
+Deletes a trip and its associated itinerary.
+
+**Response:**
+```json
+{
+  "message": "Trip deleted successfully"
+}
+```
+
+## RabbitMQ Integration
+
+The Trip Management Service uses RabbitMQ for asynchronous communication with other services:
+
+- **Publishes:** Trip creation events to notify other services
+- **Consumes:** Feedback from other services (e.g., itinerary creation confirmation)
+
+## Service Integration
+
+The Trip Management Service integrates with:
+
+- **Itinerary Service**: To create and manage detailed travel itineraries
+- **Recommendation Service**: Indirectly, through the Itinerary Service for travel recommendations
+
+## Required Environment Variables
+
+- `DATABASE_URL`: PostgreSQL connection string (default: `postgresql://postgres:postgres@trip-db:5432/trip_db`)
+- `ITINERARY_SERVICE_URL`: URL of the Itinerary Service (default: `http://itinerary:5004`)
+- `RABBITMQ_HOST`: RabbitMQ server address (default: `rabbitmq`)
+- `RABBITMQ_PORT`: RabbitMQ server port (default: `5672`)
+
+## Development
+
+To run the service locally:
+
 ```bash
-python -m unittest discover tests
-```
-
-## Docker
-
-Build the container:
-```bash
-docker build -t trip-management .
-```
-
-Run the container:
-```bash
-docker run -p 5001:5001 --env-file .env trip-management
+pip install -r requirements.txt
+flask run --host=0.0.0.0 --port=5005
 ```

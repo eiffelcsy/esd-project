@@ -12,61 +12,80 @@ def register_routes(app):
     # Get recommendations based on trip details
     @app.route('/api/recommendations', methods=['POST'])
     def create_recommendation():
-        logger.info("Received direct API request to create recommendation")
-        data = request.get_json()
-        
-        required_fields = ['trip_id', 'destination', 'start_date', 'end_date']
-        for field in required_fields:
-            if field not in data:
-                logger.error(f"Missing required field: {field}")
-                return jsonify({'error': f'{field} is required'}), 400
-        
+        logger.info("Received request to create recommendation")
         try:
-            start_date = datetime.fromisoformat(data['start_date']).date()
-            end_date = datetime.fromisoformat(data['end_date']).date()
-        except ValueError as e:
-            logger.error(f"Invalid date format: {e}")
-            return jsonify({'error': 'Invalid date format. Use ISO format (YYYY-MM-DD)'}), 400
-        
-        # Get recommendations from OpenAI
-        logger.info(f"Calling OpenAI for recommendations for trip_id={data['trip_id']}, destination={data['destination']}")
-        recommendations = get_recommendations(data['destination'], start_date, end_date)
-        logger.info(f"Received recommendations from OpenAI for trip_id={data['trip_id']}")
-        
-        # Check if a recommendation for this trip already exists
-        existing_recommendation = Recommendation.query.filter_by(trip_id=data['trip_id']).first()
-        
-        if existing_recommendation:
-            # Update existing record
-            logger.info(f"Updating existing recommendation for trip_id={data['trip_id']}")
-            existing_recommendation.recommendations = recommendations
-            db.session.commit()
-            return jsonify(existing_recommendation.to_dict()), 200
-        else:
-            # Create new recommendation record
-            logger.info(f"Creating new recommendation for trip_id={data['trip_id']}")
-            new_recommendation = Recommendation(
-                trip_id=data['trip_id'],
-                recommendations=recommendations
-            )
+            data = request.get_json()
+            if not data:
+                logger.error("No JSON data received")
+                return jsonify({'error': 'No data provided'}), 400
+
+            logger.info(f"Received data: {data}")
             
-            db.session.add(new_recommendation)
-            db.session.commit()
+            required_fields = ['trip_id', 'destination', 'start_date', 'end_date']
+            for field in required_fields:
+                if field not in data:
+                    logger.error(f"Missing required field: {field}")
+                    return jsonify({'error': f'{field} is required'}), 400
             
-            return jsonify(new_recommendation.to_dict()), 201
+            try:
+                start_date = datetime.fromisoformat(data['start_date'].split('T')[0]).date()
+                end_date = datetime.fromisoformat(data['end_date'].split('T')[0]).date()
+            except ValueError as e:
+                logger.error(f"Invalid date format: {e}")
+                return jsonify({'error': 'Invalid date format. Use ISO format (YYYY-MM-DD)'}), 400
+            
+            # Get recommendations from OpenAI
+            logger.info(f"Calling OpenAI for recommendations for trip_id={data['trip_id']}, destination={data['destination']}")
+            recommendations = get_recommendations(data['destination'], start_date, end_date)
+            logger.info(f"Received recommendations from OpenAI for trip_id={data['trip_id']}")
+            
+            # Convert trip_id to string for database operations
+            trip_id_str = str(data['trip_id'])
+            
+            # Check if a recommendation for this trip already exists
+            existing_recommendation = Recommendation.query.filter_by(trip_id=trip_id_str).first()
+            
+            if existing_recommendation:
+                # Update existing record
+                logger.info(f"Updating existing recommendation for trip_id={trip_id_str}")
+                existing_recommendation.recommendations = recommendations
+                db.session.commit()
+                return jsonify(existing_recommendation.to_dict()), 200
+            else:
+                # Create new recommendation record
+                logger.info(f"Creating new recommendation for trip_id={trip_id_str}")
+                new_recommendation = Recommendation(
+                    trip_id=trip_id_str,
+                    recommendations=recommendations
+                )
+                
+                db.session.add(new_recommendation)
+                db.session.commit()
+                
+                return jsonify(new_recommendation.to_dict()), 201
+        except Exception as e:
+            logger.error(f"Error creating recommendation: {str(e)}")
+            db.session.rollback()  # Rollback the session in case of error
+            return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
     
     # Get recommendation by trip ID
     @app.route('/api/recommendations/<trip_id>', methods=['GET'])
     def get_recommendation(trip_id):
-        logger.info(f"Fetching recommendation for trip_id={trip_id}")
-        recommendation = Recommendation.query.filter_by(trip_id=trip_id).first()
-        
-        if not recommendation:
-            logger.warning(f"Recommendation not found for trip_id={trip_id}")
-            return jsonify({'error': 'Recommendation not found'}), 404
+        try:
+            # Convert trip_id to string for database query
+            trip_id_str = str(trip_id)
+            logger.info(f"Fetching recommendation for trip_id={trip_id_str}")
+            recommendation = Recommendation.query.filter_by(trip_id=trip_id_str).first()
             
-        logger.info(f"Found recommendation for trip_id={trip_id}")
-        return jsonify(recommendation.to_dict()), 200
+            if not recommendation:
+                logger.warning(f"Recommendation not found for trip_id={trip_id_str}")
+                return jsonify({'error': 'Recommendation not found'}), 404
+                
+            logger.info(f"Found recommendation for trip_id={trip_id_str}")
+            return jsonify(recommendation.to_dict()), 200
+        except Exception as e:
+            logger.error(f"Error fetching recommendation: {str(e)}")
+            return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
         
     # Get all recommendations
     @app.route('/api/recommendations', methods=['GET'])
