@@ -1,106 +1,229 @@
 # Group Management Service
 
-This is a composite microservice that orchestrates the creation of groups by coordinating between the User, Group, and Calendar microservices.
+The Group Management Service handles creation and management of travel groups, enabling users to plan trips together.
 
-## Functionality
+## Endpoints
 
-The service handles the following workflow:
+### Health Check
 
-1. Receives a group creation request with details (name, description, creator, users, date ranges)
-2. Validates the creator's user ID with the User service
-3. Creates a group via the Group service
-4. Sets up a calendar for the group via the Calendar service
-5. Tracks the status of each group creation request
+```
+GET /health
+```
 
-## API Endpoints
+Returns the service health status.
 
-### Create a Group
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "group-management"
+}
+```
+
+### Create Group
 
 ```
 POST /api/groups
 ```
 
-**Request Body:**
+Creates a new travel group and initializes a calendar for the group.
 
+**Request:**
 ```json
 {
-  "name": "Trip to Japan",
-  "description": "A two-week trip to Japan",
-  "createdBy": 123, 
-  "users": [123], 
-  "startDateRange": "2023-10-01T00:00:00",
-  "endDateRange": "2023-10-14T23:59:59"
+  "name": "Europe Trip 2023",
+  "description": "Summer trip through Europe",
+  "createdBy": 1,
+  "users": [2, 3, 4],
+  "startDateRange": "2023-07-01T00:00:00",
+  "endDateRange": "2023-07-15T00:00:00"
 }
 ```
 
-**Response (Success):**
-
+**Response:**
 ```json
 {
-  "id": 456,
-  "name": "Trip to Japan",
-  "description": "A two-week trip to Japan",
-  "created_by": 123,
-  "users": [123],
+  "id": 1,
+  "name": "Europe Trip 2023",
+  "description": "Summer trip through Europe",
+  "created_by": 1,
   "calendar": {
-    "id": 789,
-    "group_id": 456,
-    "start_date_range": "2023-10-01T00:00:00",
-    "end_date_range": "2023-10-14T23:59:59" 
+    "id": 1,
+    "group_id": 1,
+    "start_date_range": "2023-07-01T00:00:00",
+    "end_date_range": "2023-07-15T00:00:00"
   },
-  "status": "completed"
+  "status": "completed",
+  "invited_users": [2, 3, 4],
+  "active_users": [1]
 }
 ```
 
-### Get All Group Requests
+### Join Group
 
 ```
-GET /api/groups/requests
+POST /api/groups/{group_id}/join
 ```
 
-Returns a list of all group creation requests with their status.
+Allows an invited user to join a group.
 
-### Get a Specific Group Request
-
-```
-GET /api/groups/requests/{request_id}
-```
-
-Returns details about a specific group creation request.
-
-## Configuration
-
-The service requires the following environment variables:
-
-- `DATABASE_URL`: PostgreSQL connection string
-- `USER_SERVICE_URL`: URL of the User microservice
-- `GROUP_SERVICE_URL`: URL of the Group microservice
-- `CALENDAR_SERVICE_URL`: URL of the Calendar microservice
-- `PORT`: Port to run the service on (default: 5003)
-
-## Running the Service
-
-### Using Docker
-
-```bash
-docker build -t group-management .
-docker run -p 5003:5003 --env-file .env group-management
+**Request:**
+```json
+{
+  "user_id": 2
+}
 ```
 
-### Using Docker Compose
+**Response:**
+```json
+{
+  "message": "User 2 successfully joined group 1",
+  "group_id": 1,
+  "user_id": 2,
+  "joined_users": [1, 2]
+}
+```
 
-Add the service to your docker-compose.yml file.
+### Get Group
+
+```
+GET /api/groups/{group_id}
+```
+
+Retrieves details about a specific group.
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "Europe Trip 2023",
+  "description": "Summer trip through Europe",
+  "created_by": 1,
+  "members": [
+    {
+      "id": 1,
+      "first_name": "John",
+      "last_name": "Doe",
+      "profile_picture": "https://example.com/profile1.jpg"
+    },
+    {
+      "id": 2,
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "profile_picture": "https://example.com/profile2.jpg"
+    }
+  ],
+  "invited_users": [3, 4]
+}
+```
+
+### Get User Groups
+
+```
+GET /api/users/{user_id}/groups
+```
+
+Retrieves all groups a user is a member of.
+
+**Response:**
+```json
+{
+  "active_groups": [
+    {
+      "id": 1,
+      "name": "Europe Trip 2023",
+      "description": "Summer trip through Europe",
+      "created_by": 1,
+      "member_count": 2
+    }
+  ],
+  "invited_groups": [
+    {
+      "id": 2,
+      "name": "Asia Trip 2024",
+      "description": "Spring trip to Japan",
+      "created_by": 3,
+      "member_count": 3
+    }
+  ]
+}
+```
+
+### Invite User to Group
+
+```
+POST /api/groups/{group_id}/invite
+```
+
+Invites a user to join a group.
+
+**Request:**
+```json
+{
+  "user_id": 5
+}
+```
+
+**Response:**
+```json
+{
+  "message": "User 5 invited to group 1",
+  "group_id": 1,
+  "invited_user": 5
+}
+```
+
+### Remove User from Group
+
+```
+DELETE /api/groups/{group_id}/users/{user_id}
+```
+
+Removes a user from a group.
+
+**Response:**
+```json
+{
+  "message": "User 2 removed from group 1",
+  "group_id": 1,
+  "user_id": 2
+}
+```
+
+### Delete Group
+
+```
+DELETE /api/groups/{group_id}
+```
+
+Deletes a group and all associated resources.
+
+**Response:**
+```json
+{
+  "message": "Group 1 deleted successfully",
+  "group_id": 1
+}
+```
+
+## Service Integration
+
+The Group Management Service integrates with:
+
+- **User Service**: To validate users and retrieve user details
+- **Calendar Service**: To create and manage group availability calendars
+
+## Required Environment Variables
+
+- `DATABASE_URL`: Connection string for PostgreSQL database (default: `postgresql://postgres:postgres@grouprequest-db:5432/grouprequest_db`)
+- `USER_SERVICE_URL`: URL of the User Service (default: `http://user:5001`)
+- `CALENDAR_SERVICE_URL`: URL of the Calendar Service (default: `http://calendar:5004`)
 
 ## Development
 
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+To run the service locally:
 
-2. Set environment variables (see .env.example)
-
-3. Run the service:
-   ```bash
-   python app.py
-   ```
+```bash
+pip install -r requirements.txt
+flask run --host=0.0.0.0 --port=5003
+```
