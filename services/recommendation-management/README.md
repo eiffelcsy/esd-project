@@ -1,120 +1,197 @@
 # Recommendation Management Service
 
-This microservice is responsible for generating travel recommendations using the OpenAI API based on trip dates and destination. It consumes messages from a RabbitMQ queue, processes them, and sends back the recommendations.
+The Recommendation Management Service provides AI-powered travel recommendations for trips. It uses OpenAI's API to generate personalized suggestions for destinations, activities, and more.
 
-## Features
-
-- Consumes trip data messages from RabbitMQ
-- Generates travel recommendations using OpenAI's GPT-4-turbo
-- Stores only trip_id and recommendations in PostgreSQL database for persistence
-- Provides REST API endpoints for recommendation management
-- Publishes recommendation results back to RabbitMQ
-
-## Requirements
-
-- Python 3.9+
-- Flask
-- PostgreSQL
-- RabbitMQ
-- OpenAI API key
-
-## Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
-
-```
-# Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/recommendation_db
-
-# RabbitMQ
-RABBITMQ_HOST=localhost
-RABBITMQ_PORT=5672
-RABBITMQ_USER=guest
-RABBITMQ_PASS=guest
-
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key
-
-# Service Configuration
-PORT=5002
-```
-
-## Installation
-
-1. Clone the repository
-2. Install dependencies with `pip install -r requirements.txt`
-3. Set up the environment variables as described above
-4. Run the service with `python app.py`
-
-## API Endpoints
+## Endpoints
 
 ### Health Check
+
 ```
 GET /health
 ```
 
+Returns health status of the service, including database and message queue connectivity.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "recommendation-management",
+  "database_status": "connected",
+  "recommendation_count": 15,
+  "cached_trip_ids": 3
+}
+```
+
+### Root Endpoint
+
+```
+GET /
+```
+
+Service information endpoint.
+
+**Response:**
+```json
+{
+  "message": "Recommendation Management Service API. Use /health for health check."
+}
+```
+
 ### Create Recommendation
+
 ```
 POST /api/recommendations
 ```
-Request body:
+
+Creates a new recommendation for a trip.
+
+**Request:**
 ```json
 {
-  "trip_id": "12345",
+  "trip_id": 123,
   "destination": "Paris",
-  "start_date": "2023-09-15",
-  "end_date": "2023-09-20"
+  "start_date": "2023-11-05T00:00:00",
+  "end_date": "2023-11-12T00:00:00"
+}
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "trip_id": "123",
+  "recommendations": {
+    "attractions": ["Eiffel Tower", "Louvre Museum", "Notre-Dame Cathedral"],
+    "restaurants": ["Le Jules Verne", "L'Ambroisie", "Le Cinq"],
+    "activities": ["Seine River Cruise", "Wine Tasting", "Walking Tour of Montmartre"],
+    "day_trips": ["Versailles Palace", "Giverny", "Loire Valley"]
+  },
+  "created_at": "2023-10-25T14:30:45"
 }
 ```
 
 ### Get Recommendation by Trip ID
+
 ```
 GET /api/recommendations/{trip_id}
 ```
 
+Retrieves recommendations for a specific trip.
+
+**Response:**
+```json
+{
+  "id": 1,
+  "trip_id": "123",
+  "recommendations": {
+    "attractions": ["Eiffel Tower", "Louvre Museum", "Notre-Dame Cathedral"],
+    "restaurants": ["Le Jules Verne", "L'Ambroisie", "Le Cinq"],
+    "activities": ["Seine River Cruise", "Wine Tasting", "Walking Tour of Montmartre"],
+    "day_trips": ["Versailles Palace", "Giverny", "Loire Valley"]
+  },
+  "created_at": "2023-10-25T14:30:45"
+}
+```
+
 ### Get All Recommendations
+
 ```
 GET /api/recommendations
 ```
 
-## Message Format
+Retrieves all recommendations stored in the service.
 
-### Incoming Message
+**Response:**
 ```json
-{
-  "trip_id": "12345",
-  "destination": "Paris",
-  "start_date": "2023-09-15",
-  "end_date": "2023-09-20"
-}
-```
-
-### Outgoing Message
-```json
-{
-  "trip_id": "12345",
-  "destination": "Paris",
-  "start_date": "2023-09-15",
-  "end_date": "2023-09-20",
-  "recommendations": {
-    "attractions": [...],
-    "restaurants": [...],
-    "activities": [...],
-    "events": [...],
-    "tips": [...]
+[
+  {
+    "id": 1,
+    "trip_id": "123",
+    "recommendations": {
+      "attractions": ["Eiffel Tower", "Louvre Museum", "Notre-Dame Cathedral"],
+      "restaurants": ["Le Jules Verne", "L'Ambroisie", "Le Cinq"],
+      "activities": ["Seine River Cruise", "Wine Tasting", "Walking Tour of Montmartre"],
+      "day_trips": ["Versailles Palace", "Giverny", "Loire Valley"]
+    },
+    "created_at": "2023-10-25T14:30:45"
   },
-  "timestamp": "2023-08-01T12:00:00Z"
+  {
+    "id": 2,
+    "trip_id": "124",
+    "recommendations": {
+      "attractions": ["Colosseum", "Vatican Museums", "Trevi Fountain"],
+      "restaurants": ["La Pergola", "Il Pagliaccio", "Roscioli"],
+      "activities": ["Food Tour", "Vespa Ride", "Gladiator School"],
+      "day_trips": ["Pompeii", "Tivoli", "Tuscany"]
+    },
+    "created_at": "2023-10-26T10:15:30"
+  }
+]
+```
+
+### Test OpenAI Integration
+
+```
+GET /api/test/openai?destination={destination}
+```
+
+Tests the OpenAI API integration with an optional destination parameter.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "OpenAI integration test successful",
+  "sample_data": {
+    "attractions": ["Example Attraction 1", "Example Attraction 2"],
+    "restaurants": ["Example Restaurant 1", "Example Restaurant 2"],
+    "activities": ["Example Activity 1", "Example Activity 2"],
+    "day_trips": ["Example Day Trip 1", "Example Day Trip 2"]
+  }
 }
 ```
 
-### Database Schema
+### Test RabbitMQ Connectivity
 
 ```
-Recommendation
--------------
-id: Integer (Primary Key)
-trip_id: String (Unique)
-recommendations: JSON
-created_at: DateTime
-updated_at: DateTime
+GET /api/test/rabbitmq
+```
+
+Tests RabbitMQ connection and queue declarations.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Successfully connected to RabbitMQ",
+  "queues_declared": ["recommendation_requests", "recommendation_responses"]
+}
+```
+
+## Message Queue Integration
+
+The service uses RabbitMQ for asynchronous communication with other services:
+
+- **Listens on:** `recommendation_requests` queue
+- **Publishes to:** `recommendation_responses` queue
+
+Recommendation requests can be sent via the REST API or through the message queue.
+
+## Required Environment Variables
+
+- `DATABASE_URL`: PostgreSQL connection string (default: `postgresql://postgres:postgres@recommendation-db:5432/recommendation_db`)
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `RABBITMQ_HOST`: RabbitMQ server address (default: `rabbitmq`)
+- `RABBITMQ_PORT`: RabbitMQ server port (default: `5672`)
+- `RABBITMQ_USER`: RabbitMQ username (default: `guest`)
+- `RABBITMQ_PASS`: RabbitMQ password (default: `guest`)
+
+## Development
+
+To run the service locally:
+
+```bash
+pip install -r requirements.txt
+flask run --host=0.0.0.0 --port=5002
 ```

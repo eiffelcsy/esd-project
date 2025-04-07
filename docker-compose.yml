@@ -1,4 +1,21 @@
 services:
+  # RabbitMQ service
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # PostgreSQL database for user service
   user-db:
     image: postgres:13
@@ -10,7 +27,7 @@ services:
     volumes:
       - user_postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5436:5432"
+      - "5432:5432"
     networks:
       - app-network
 
@@ -20,46 +37,14 @@ services:
       context: ./services/user
     container_name: user-service
     ports:
-      - "5005:5005"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@user-db:5432/user_db
+      - "5001:5001"
+    env_file:
+      - ./services/user/.env
     volumes:
       - ./services/user:/app
     restart: unless-stopped
     depends_on:
       - user-db
-    networks:
-      - app-network
-
-  # PostgreSQL database for template service
-  template-db:
-    image: postgres:13
-    container_name: template-db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=template_db
-    volumes:
-      - template_postgres_data:/var/lib/postgresql/data/
-    ports:
-      - "5432:5432"
-    networks:
-      - app-network
-
-  # Template microservice
-  template:
-    build: 
-      context: ./services/template
-    container_name: template-service
-    ports:
-      - "12345:5001"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@template-db:5432/template_db
-    volumes:
-      - ./services/template:/app
-    restart: unless-stopped
-    depends_on:
-      - template-db
     networks:
       - app-network
 
@@ -85,10 +70,8 @@ services:
     container_name: recommendation-management-service
     ports:
       - "5002:5002"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@recommendation-db:5432/recommendation_db
-      - OPENAI_API_KEY=your_openai_api_key
-      - RABBITMQ_HOST=rabbitmq
+    env_file:
+      - ./services/recommendation-management/.env
     volumes:
       - ./services/recommendation-management:/app
     restart: unless-stopped
@@ -114,7 +97,6 @@ services:
       - app-network
 
   # Group management microservice
-
   group-management:
     build:
       context: ./services/group-management
@@ -131,38 +113,89 @@ services:
     networks:
       - app-network
 
-  # RabbitMQ service
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    ports:
-      - "5673:5672"
-      - "15673:15672"
+  # PostgreSQL database for calendar service
+  calendar-db:
+    image: postgres:13
+    container_name: calendar-db
+    environment:
+      - POSTGRES_DB=calendar_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - calendar_db_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "rabbitmqctl", "status"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 5
 
-  # Itinerary microservice
-  itinerary:
+  # Calendar microservice
+  calendar:
     build:
-      context: ./services/itinerary
-    container_name: itinerary-service
+      context: ./services/calendar
+    container_name: calendar-service
     ports:
       - "5004:5004"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@itinerary-db:5432/itinerary_db
-      - TRIP_MANAGEMENT_URL=http://trip-management:5007
+    env_file:
+      - ./services/calendar/.env
     volumes:
-      - ./services/itinerary:/app
+      - ./services/calendar:/app
     restart: unless-stopped
     depends_on:
-      - itinerary-db
+      calendar-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # PostgreSQL database for trip management service
+  trip-db:
+    image: postgres:13
+    container_name: trip-db
+    environment:
+      - POSTGRES_DB=trip_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - trip_db_data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Trip management microservice
+  trip-management:
+    build:
+      context: ./services/trip-management
+    container_name: trip-management-service
+    ports:
+      - "5005:5005"
+    env_file:
+      - ./services/trip-management/.env
+    volumes:
+      - ./services/trip-management:/app
+    restart: unless-stopped
+    depends_on:
+      trip-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      recommendation-management:
+        condition: service_started
+      calendar:
+        condition: service_started
     networks:
       - app-network
 
@@ -171,13 +204,43 @@ services:
     image: postgres:13
     container_name: itinerary-db
     environment:
+      - POSTGRES_DB=itinerary_db
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=itinerary_db
+      - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
-      - itinerary_postgres_data:/var/lib/postgresql/data/
+      - itinerary_db_data:/var/lib/postgresql/data
     ports:
-      - "5435:5432"
+      - "5437:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Itinerary microservice
+  itinerary:
+    build:
+      context: ./services/itinerary
+    container_name: itinerary-service
+    ports:
+      - "5006:5006"
+    env_file:
+      - ./services/itinerary/.env
+    volumes:
+      - ./services/itinerary:/app
+    restart: unless-stopped
+    depends_on:
+      itinerary-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      recommendation-management:
+        condition: service_started
+      calendar:
+        condition: service_started
     networks:
       - app-network
 
@@ -187,7 +250,7 @@ services:
       context: ./services/expense-management
     container_name: expense-management-service
     ports:
-      - "5006:5006"
+      - "5007:5007"
     volumes:
       - ./services/expense-management:/app
     restart: unless-stopped
@@ -196,152 +259,47 @@ services:
     networks:
       - app-network
 
-  # PostgreSQL database for trip management service
-  trip-db:
+  # PostgreSQL database for finance service
+  finance-db:
     image: postgres:13
-    container_name: trip-db
+    container_name: finance-db
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=trip_db
+      - POSTGRES_DB=finance_db
     volumes:
-      - trip_postgres_data:/var/lib/postgresql/data/
-    ports:
-      - "5439:5432"
-    networks:
-      - app-network
-
-  # Trip management microservice
-  trip-management:
-    build:
-      context: ./services/trip-management
-    container_name: trip-management-service
-    ports:
-      - "5007:5007"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@trip-db:5432/trip_db
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - PORT=5007
-      - ITINERARY_SERVICE_URL=http://itinerary:5004
-    volumes:
-      - ./services/trip-management:/app
-    restart: unless-stopped
-    depends_on:
-      - trip-db
-      - rabbitmq
-      - recommendation-management
-    networks:
-      - app-network
-
-  # PostgreSQL database for calendar service
-  calendar-db:
-    image: postgres:13
-    container_name: calendar-db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=calendar_db
-    volumes:
-      - calendar_postgres_data:/var/lib/postgresql/data/
-    ports:
-      - "5437:5432"
-    networks:
-      - app-network
-
-  # Calendar microservice
-  calendar:
-    build:
-      context: ./services/calendar
-    container_name: calendar-service
-    ports:
-      - "5008:5006"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@calendar-db:5432/calendar_db
-      - RABBITMQ_HOST=rabbitmq
-    volumes:
-      - ./services/calendar:/app
-    restart: unless-stopped
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      calendar-db:
-        condition: service_started
-    networks:
-      - app-network
-
-  # Postgres database used by Kong
-  kong-db:
-    image: postgres:17.4
-    platform: linux/amd64  # <- required for Mac M1 chip. Otherwise, can remove
-    restart: always
-    networks:
-      - app-network
-    environment:
-      POSTGRES_DB: kong
-      POSTGRES_USER: kong
-      POSTGRES_PASSWORD: password
+      - finance_postgres_data:/var/lib/postgresql/data/
     ports:
       - "5438:5432"
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "kong"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - kong_postgres_data:/var/lib/postgresql/data
-
-  # Kong database migration
-  kong-migration:
-    image: kong/kong-gateway:3.9
-    platform: linux/amd64  # <- required for Mac M1 chip. Otherwise, can remove
-    command: "kong migrations bootstrap"
-    restart: on-failure
     networks:
       - app-network
-    environment:
-      KONG_DATABASE: postgres
-      KONG_PG_HOST: kong-db
-      KONG_PG_USER: kong
-      KONG_PG_PASSWORD: password
-    depends_on:
-      - kong-db
 
-  # Kong API Gateway
-  kong:
-    image: kong/kong-gateway:3.9
-    platform: linux/amd64  # <- required for Mac M1 chip. Otherwise, can remove
-    restart: always
-    networks:
-      - app-network
-    environment:
-      KONG_DATABASE: postgres
-      KONG_PG_HOST: kong-db
-      KONG_PG_USER: kong
-      KONG_PG_PASSWORD: password
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_ADMIN_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001
-      KONG_ADMIN_GUI_URL: http://localhost:8002
-    depends_on:
-      - kong-migration
+  # Finance microservice
+  finance:
+    build:
+      context: ./services/finance
+    container_name: finance-service
     ports:
-      - "8000:8000"  # Proxy
-      - "8001:8001"  # Admin API
-      - "8002:8002"  # Kong Manager
+      - "5008:5008"
+    env_file:
+      - ./services/finance/.env
+    volumes:
+      - ./services/finance:/app
+    restart: unless-stopped
+    depends_on:
+      - finance-db
+    networks:
+      - app-network
+
+volumes:
+  rabbitmq_data:
+  user_postgres_data:
+  grouprequest_postgres_data:
+  recommendation_postgres_data:
+  calendar_db_data:
+  trip_db_data:
+  itinerary_db_data:
+  finance_postgres_data:
 
 networks:
   app-network:
-    driver: bridge
-
-volumes:
-  template_postgres_data:
-  recommendation_postgres_data:
-  trip_postgres_data:
-  rabbitmq_data:
-  grouprequest_postgres_data:
-  itinerary_postgres_data:
-  user_postgres_data:
-  calendar_postgres_data:
-  kong_postgres_data:
