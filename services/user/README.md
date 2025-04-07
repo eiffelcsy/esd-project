@@ -1,6 +1,197 @@
 # User Service
 
-This microservice handles user authentication, registration, and profile management for the trip planning application.
+The User Service handles user authentication, registration, profile management, and search functionality.
+
+## Endpoints
+
+### Health Check
+
+```
+GET /health
+```
+
+Returns the service health status.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "user"
+}
+```
+
+### User Registration
+
+```
+POST /api/users/register
+```
+
+Register a new user.
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "first_name": "John",
+  "last_name": "Doe",
+  "profile_picture": "https://example.com/profile.jpg"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "User registered successfully",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "profile_picture": "https://example.com/profile.jpg"
+  },
+  "user_id": 1
+}
+```
+
+### User Login
+
+```
+POST /api/users/login
+```
+
+Authenticate a user.
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Login successful",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "profile_picture": "https://example.com/profile.jpg"
+  },
+  "user_id": 1
+}
+```
+
+### Get User Profile
+
+```
+GET /api/users/profile/{user_id}
+```
+
+Retrieve detailed user profile information.
+
+**Response:**
+```json
+{
+  "id": 1,
+  "email": "user@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "profile_picture": "https://example.com/profile.jpg"
+}
+```
+
+### Update User Profile
+
+```
+PUT /api/users/profile/{user_id}
+```
+
+Update a user's profile.
+
+**Request:**
+```json
+{
+  "first_name": "John",
+  "last_name": "Smith",
+  "profile_picture": "https://example.com/new-profile.jpg",
+  "password": "new-password123"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Profile updated successfully",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Smith",
+    "profile_picture": "https://example.com/new-profile.jpg"
+  }
+}
+```
+
+### Get Public User Profile
+
+```
+GET /api/users/{user_id}
+```
+
+Retrieve public user profile information.
+
+**Response:**
+```json
+{
+  "id": 1,
+  "first_name": "John",
+  "last_name": "Smith",
+  "profile_picture": "https://example.com/new-profile.jpg"
+}
+```
+
+### Search Users
+
+```
+GET /api/users/search?q={query}
+```
+
+Search for users by email address.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "first_name": "John",
+    "last_name": "Smith",
+    "profile_picture": "https://example.com/profile.jpg"
+  },
+  {
+    "id": 2,
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "profile_picture": "https://example.com/profile2.jpg"
+  }
+]
+```
+
+## Required Environment Variables
+
+- `DATABASE_URL`: Connection string for PostgreSQL database (default: `postgresql://postgres:postgres@user-db:5432/user_db`)
+
+## Development
+
+To run the service locally:
+
+```bash
+pip install -r requirements.txt
+flask run --host=0.0.0.0 --port=5001
+```
 
 ## Features
 
