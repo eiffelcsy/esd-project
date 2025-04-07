@@ -678,18 +678,6 @@ async function submitDates() {
   }
 }
 
-async function fetchAIRecommendations() {
-  try {
-    // TODO: Implement API call to get AI recommendations
-    const response = await fetch(`/api/recommendations?start=${tripDates.start}&end=${tripDates.end}`)
-    if (response.ok) {
-      aiRecommendations.value = await response.json()
-    }
-  } catch (error) {
-    console.error('Error fetching recommendations:', error)
-  }
-}
-
 function selectDestination(destination) {
   selectedDestination.value = destination
 }

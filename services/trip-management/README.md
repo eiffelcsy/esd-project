@@ -201,26 +201,17 @@ Deletes a trip and its associated itinerary.
 }
 ```
 
-## RabbitMQ Integration
-
-The Trip Management Service uses RabbitMQ for asynchronous communication with other services:
-
-- **Publishes:** Trip creation events to notify other services
-- **Consumes:** Feedback from other services (e.g., itinerary creation confirmation)
-
 ## Service Integration
 
 The Trip Management Service integrates with:
 
-- **Itinerary Service**: To create and manage detailed travel itineraries
+- **Itinerary Service**: To create and manage detailed travel itineraries via HTTP APIs
 - **Recommendation Service**: Indirectly, through the Itinerary Service for travel recommendations
 
 ## Required Environment Variables
 
 - `DATABASE_URL`: PostgreSQL connection string (default: `postgresql://postgres:postgres@trip-db:5432/trip_db`)
 - `ITINERARY_SERVICE_URL`: URL of the Itinerary Service (default: `http://itinerary:5004`)
-- `RABBITMQ_HOST`: RabbitMQ server address (default: `rabbitmq`)
-- `RABBITMQ_PORT`: RabbitMQ server port (default: `5672`)
 
 ## Development
 

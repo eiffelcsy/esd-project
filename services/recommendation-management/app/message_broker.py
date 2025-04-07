@@ -6,7 +6,6 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from app.openai_service import get_recommendations
-from app.models import db, Recommendation
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 # In-memory cache to track recently processed trip_ids to avoid duplicate processing
 # Format: {trip_id: timestamp}
 processed_trip_ids = {}
-CACHE_EXPIRY_SECONDS = 300  # 5 minutes
+CACHE_EXPIRY_SECONDS = 60  # 5 minutes
 
 def connect_to_rabbitmq():
     """Connect to RabbitMQ and return connection and channel"""
@@ -105,61 +104,14 @@ def process_recommendation_request(ch, method, properties, body, app=None):
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
         
-        # Check if recommendation already exists in the database
-        existing_recommendation = None
-        recommendations = None
-        
-        if app:
-            try:
-                with app.app_context():
-                    existing_recommendation = Recommendation.query.filter_by(trip_id=trip_id).first()
-                    if existing_recommendation and existing_recommendation.recommendations:
-                        logger.info(f"Found existing recommendations in database for trip_id={trip_id}")
-                        recommendations = existing_recommendation.recommendations
-            except Exception as e:
-                logger.error(f"Error checking existing recommendations: {e}")
-                logger.error(f"Stack trace: {traceback.format_exc()}")
-        
-        # Only call OpenAI if we don't already have recommendations
-        if not recommendations:
-            try:
-                logger.info(f"Calling OpenAI service for recommendations for trip_id={trip_id}")
-                recommendations = get_recommendations(destination, start_date, end_date)
-                logger.info(f"Received recommendations from OpenAI for trip_id={trip_id}: {json.dumps(recommendations)[:200]}...")
-            except Exception as e:
-                logger.error(f"Error getting recommendations from OpenAI: {e}")
-                logger.error(f"Stack trace: {traceback.format_exc()}")
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                return
-        else:
-            logger.info(f"Using existing recommendations for trip_id={trip_id} instead of calling OpenAI again")
-        
-        # Save to database (within app context)
-        if app:
-            try:
-                with app.app_context():
-                    if existing_recommendation:
-                        # Update existing record
-                        existing_recommendation.recommendations = recommendations
-                        existing_recommendation.updated_at = datetime.utcnow()
-                        db.session.commit()
-                        logger.info(f"Updated existing recommendation for trip_id: {trip_id}")
-                    else:
-                        # Create new recommendation
-                        new_recommendation = Recommendation(
-                            trip_id=trip_id,
-                            recommendations=recommendations
-                        )
-                        db.session.add(new_recommendation)
-                        db.session.commit()
-                        logger.info(f"Saved new recommendation for trip_id: {trip_id}")
-            except Exception as e:
-                logger.error(f"Error saving recommendation to database: {e}")
-                logger.error(f"Stack trace: {traceback.format_exc()}")
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                return
-        else:
-            logger.error("No Flask app context provided, cannot save to database")
+        # Get recommendations from OpenAI
+        try:
+            logger.info(f"Calling OpenAI service for recommendations for trip_id={trip_id}")
+            recommendations = get_recommendations(destination, start_date, end_date)
+            logger.info(f"Received recommendations from OpenAI for trip_id={trip_id}: {json.dumps(recommendations)[:200]}...")
+        except Exception as e:
+            logger.error(f"Error getting recommendations from OpenAI: {e}")
+            logger.error(f"Stack trace: {traceback.format_exc()}")
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
         
@@ -214,7 +166,7 @@ def process_recommendation_request(ch, method, properties, body, app=None):
         except Exception:
             pass
 
-def setup_rabbitmq_consumer(app):
+def setup_rabbitmq_consumer(app=None):
     """Set up RabbitMQ consumer for recommendation requests"""
     def callback_wrapper(ch, method, properties, body):
         process_recommendation_request(ch, method, properties, body, app)
@@ -249,77 +201,44 @@ def setup_rabbitmq_consumer(app):
                 auto_ack=False
             )
             
-            logger.info(f"Started consuming from RabbitMQ queue: {request_queue}")
+            logger.info(f"Consumer registered for queue: {request_queue}")
+            logger.info("Waiting for recommendation requests. To exit press CTRL+C")
             
-            try:
-                channel.start_consuming()
-            except KeyboardInterrupt:
-                logger.info("Interrupted by user, shutting down...")
-                channel.stop_consuming()
-                connection.close()
-                break
-            except Exception as e:
-                logger.error(f"Error during message consumption: {str(e)}")
-                logger.error(f"Stack trace: {traceback.format_exc()}")
-                # Try to close the connection and retry
-                try:
-                    channel.stop_consuming()
-                except Exception:
-                    pass
-                try:
-                    connection.close()
-                except Exception:
-                    pass
-                
-                logger.info("Retrying in 10 seconds...")
-                time.sleep(10)
-                retry_count += 1
-                continue
-                
+            # Start consuming
+            channel.start_consuming()
+            
         except Exception as e:
-            logger.error(f"Connection to RabbitMQ failed: {str(e)}")
+            logger.error(f"Error in RabbitMQ consumer: {e}")
             logger.error(f"Stack trace: {traceback.format_exc()}")
+            
+            # Increment retry count
             retry_count += 1
             
-            # Try to close any open connection
-            try:
-                if channel and channel.is_open:
-                    channel.close()
-            except Exception:
-                pass
-            try:
-                if connection and connection.is_open:
-                    connection.close()
-            except Exception:
-                pass
+            # Wait before retrying
+            if retry_count < max_retries:
+                retry_delay = min(30, 2 ** retry_count)  # Exponential backoff, max 30 seconds
+                logger.info(f"Retrying connection in {retry_delay} seconds...")
+                time.sleep(retry_delay)
             
-            if retry_count >= max_retries:
-                logger.error(f"Failed to connect to RabbitMQ after {max_retries} attempts. Will keep trying in the background.")
-                # Reset retry count to keep trying indefinitely, but with a longer delay
-                retry_count = 0
-                time.sleep(30)
-            else:
-                logger.info(f"Retrying in 10 seconds... (attempt {retry_count}/{max_retries})")
-                time.sleep(10)
+            # Close any open connection
+            if connection and connection.is_open:
+                try:
+                    connection.close()
+                except Exception:
+                    pass
+        
+        # If we reach here, we either had an error or the connection was closed
+        if retry_count >= max_retries:
+            logger.error(f"Failed to connect to RabbitMQ after {max_retries} attempts")
+            break
 
-def start_consumer_thread(app):
-    """Start RabbitMQ consumer in a separate thread"""
+def start_consumer_thread(app=None):
+    """Start a thread to consume recommendation requests"""
     import threading
+    
+    # RabbitMQ consumer thread
     consumer_thread = threading.Thread(target=setup_rabbitmq_consumer, args=(app,))
     consumer_thread.daemon = True
     consumer_thread.start()
-    logger.info("Started RabbitMQ consumer thread")
-    
-    # Declare and test the queues immediately to verify connection
-    try:
-        conn, channel = connect_to_rabbitmq()
-        # Declare both queues
-        channel.queue_declare(queue='recommendation_requests', durable=True)
-        channel.queue_declare(queue='recommendation_responses', durable=True)
-        logger.info("Successfully verified RabbitMQ queues")
-        conn.close()
-    except Exception as e:
-        logger.error(f"Failed to verify RabbitMQ queues: {e}")
-        logger.error(f"Stack trace: {traceback.format_exc()}")
     
     return consumer_thread

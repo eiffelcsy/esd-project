@@ -1,11 +1,14 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 import os
-import threading
 import logging
 from app.models import db
 from app.routes import register_routes
-from app.message_broker import MessageBroker
+from app.message_broker import start_consumer_thread
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -19,10 +22,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Initialize the database
 db.init_app(app)
 
-# Initialize the message broker
-message_broker = MessageBroker(app)
-app.message_broker = message_broker
-
 # Register routes
 register_routes(app)
 
@@ -30,12 +29,6 @@ register_routes(app)
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "healthy", "service": "trip-management"}), 200
-
-def start_message_consumer():
-    """Start consuming messages from RabbitMQ in a separate thread."""
-    with app.app_context():
-        message_broker.connect()
-        message_broker.start_consuming()
 
 if __name__ == '__main__':
     # Create tables if they don't exist
@@ -52,11 +45,13 @@ if __name__ == '__main__':
                 connection.execute(text('ALTER TABLE trips ADD COLUMN group_id INTEGER'))
                 connection.commit()
     
-    # Start message consumer in a separate thread
-    consumer_thread = threading.Thread(target=start_message_consumer)
-    consumer_thread.daemon = True
-    consumer_thread.start()
-        
+        # Start RabbitMQ consumer thread
+        try:
+            consumer_thread = start_consumer_thread(app)
+            logger.info("RabbitMQ consumer thread started successfully")
+        except Exception as e:
+            logger.error(f"Error starting RabbitMQ consumer thread: {e}")
+    
     # Start the Flask application
     app.run(host='0.0.0.0', port=5005, debug=True)
 

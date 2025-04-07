@@ -6,6 +6,7 @@ import sys
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from pathlib import Path
+import pytest
 
 # Get the project root directory (two levels up from this script)
 project_root = Path(__file__).parent.parent.parent
@@ -163,6 +164,11 @@ def run_all_tests():
     print("\n" + "=" * 50)
     print("🏁 All tests completed!")
     print("=" * 50)
+
+@pytest.mark.skip(reason="HTTP APIs have been removed from recommendation-management service")
+def test_deprecated():
+    """This test is deprecated and should be skipped"""
+    pass
 
 if __name__ == "__main__":
     run_all_tests() 

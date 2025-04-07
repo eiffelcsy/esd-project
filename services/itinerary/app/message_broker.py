@@ -17,7 +17,6 @@ class MessageBroker:
         self.app = app
         self.connection = None
         self.channel = None
-        self.trip_queue = 'trip_details'
         self.recommendations_queue = 'recommendation_responses'
         self.recommendation_requests_queue = 'recommendation_requests'
         
@@ -52,18 +51,10 @@ class MessageBroker:
             self.channel = self.connection.channel()
             
             # Declare queues
-            self.channel.queue_declare(queue=self.trip_queue, durable=True)
             self.channel.queue_declare(queue=self.recommendations_queue, durable=True)
             self.channel.queue_declare(queue=self.recommendation_requests_queue, durable=True)
             
-            logger.info(f"Successfully declared queues: {self.trip_queue}, {self.recommendations_queue}, {self.recommendation_requests_queue}")
-            
-            # Set up consumer for trip queue
-            self.channel.basic_consume(
-                queue=self.trip_queue,
-                on_message_callback=self._process_trip_creation,
-                auto_ack=True
-            )
+            logger.info(f"Successfully declared queues: {self.recommendations_queue}, {self.recommendation_requests_queue}")
             
             # Set up consumer for recommendations queue
             self.channel.basic_consume(
@@ -79,52 +70,6 @@ class MessageBroker:
             logger.error(f"Error connecting to RabbitMQ: {str(e)}")
             logger.error(traceback.format_exc())
             return False
-
-    def _process_trip_creation(self, ch, method, properties, body):
-        """Process new trip creation events and create itineraries."""
-        with self.app.app_context():
-            try:
-                trip_data = json.loads(body)
-                logger.info(f"Received trip creation event: {trip_data}")
-                
-                # Create itinerary for the trip
-                from app.models import db, Itinerary
-                from datetime import datetime
-                
-                trip_id = str(trip_data.get('id'))
-                
-                # Check if itinerary already exists
-                existing_itinerary = Itinerary.query.get(trip_id)
-                if existing_itinerary:
-                    logger.info(f"Itinerary already exists for trip_id: {trip_id}")
-                    return
-                
-                # Parse dates
-                start_date = datetime.fromisoformat(trip_data.get('start_date', '')).date()
-                end_date = datetime.fromisoformat(trip_data.get('end_date', '')).date()
-                
-                # Create new itinerary
-                itinerary = Itinerary(
-                    trip_id=trip_id,
-                    destination=trip_data.get('city', ''),
-                    start_date=start_date,
-                    end_date=end_date,
-                    daily_activities={}
-                )
-                db.session.add(itinerary)
-                db.session.commit()
-                logger.info(f"Created new itinerary for trip_id: {trip_id} via message queue")
-                
-                # Request recommendations via RabbitMQ instead of HTTP request
-                self.send_recommendation_request(
-                    trip_id,
-                    trip_data.get('city', ''),
-                    trip_data.get('start_date', ''),
-                    trip_data.get('end_date', '')
-                )
-            except Exception as e:
-                logger.error(f"Error processing trip creation: {str(e)}")
-                logger.error(traceback.format_exc())
 
     def send_recommendation_request(self, trip_id, destination, start_date, end_date):
         """Send a recommendation request to the recommendation service."""
@@ -253,77 +198,66 @@ class MessageBroker:
                     content_type='application/json'
                 )
             )
-            logger.info(f"Successfully published message to queue: {queue}")
+            
+            logger.info(f"Published message to queue: {queue}")
             return True
+            
         except Exception as e:
-            logger.error(f"Error publishing message to queue {queue}: {str(e)}")
+            logger.error(f"Error publishing message to RabbitMQ: {str(e)}")
             logger.error(traceback.format_exc())
             return False
 
     def start_consuming(self):
-        """Start the message broker service."""
+        """Start consuming messages from RabbitMQ."""
         max_retries = 5
         retry_count = 0
         
         while retry_count < max_retries:
             try:
-                logger.info("Message Broker is running. To exit press CTRL+C")
+                logger.info("Starting to consume messages from RabbitMQ")
                 
-                # Make sure we have a valid connection
+                # Check if we have a valid connection and channel
                 if self.connection is None or self.connection.is_closed or self.channel is None or self.channel.is_closed:
                     logger.info("Connection is not valid, attempting to reconnect...")
                     if not self.connect():
-                        logger.error("Failed to connect, retrying in 5 seconds...")
+                        logger.error("Failed to connect to RabbitMQ, retrying in 5 seconds...")
                         time.sleep(5)
                         retry_count += 1
                         continue
                 
                 # Start consuming messages
+                logger.info("Starting to consume messages")
                 self.channel.start_consuming()
                 
-            except KeyboardInterrupt:
-                logger.info("Interrupted by user, shutting down...")
-                self.close()
-                break
+                logger.info("Message consumption ended")
+                
+            except pika.exceptions.AMQPConnectionError as e:
+                logger.error(f"AMQP connection error: {str(e)}")
+                logger.info("Reconnecting in 5 seconds...")
+                time.sleep(5)
+                retry_count += 1
+                
+            except pika.exceptions.ChannelClosedByBroker as e:
+                logger.error(f"Channel closed by broker: {str(e)}")
+                logger.info("Reconnecting in 5 seconds...")
+                time.sleep(5)
+                retry_count += 1
                 
             except Exception as e:
-                logger.error(f"Error during message consumption: {str(e)}")
+                logger.error(f"Unexpected error: {str(e)}")
                 logger.error(traceback.format_exc())
-                # Try to clean up
-                try:
-                    if self.channel and self.channel.is_open:
-                        self.channel.stop_consuming()
-                except Exception:
-                    pass
-                
-                self.close()
-                
-                # Retry with a delay
+                logger.info("Reconnecting in 5 seconds...")
+                time.sleep(5)
                 retry_count += 1
-                if retry_count < max_retries:
-                    logger.info(f"Retrying in 5 seconds (attempt {retry_count}/{max_retries})...")
-                    time.sleep(5)
-                else:
-                    logger.error("Max retries reached, giving up.")
-                    break
+                
+        logger.error(f"Failed to consume messages after {max_retries} retries")
 
     def close(self):
-        """Close the connection."""
+        """Close the connection to RabbitMQ."""
         try:
-            if self.channel and self.channel.is_open:
-                try:
-                    self.channel.stop_consuming()
-                except Exception:
-                    pass
-                try:
-                    self.channel.close()
-                except Exception:
-                    pass
             if self.connection and self.connection.is_open:
-                try:
-                    self.connection.close()
-                except Exception:
-                    pass
+                self.connection.close()
+                logger.info("Closed RabbitMQ connection")
         except Exception as e:
             logger.error(f"Error closing RabbitMQ connection: {str(e)}")
             logger.error(traceback.format_exc()) 

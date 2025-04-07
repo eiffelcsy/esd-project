@@ -49,7 +49,7 @@ def get_recommendations(destination, start_date, end_date):
         response = client.chat.completions.create(
             model="gpt-4-turbo-preview",
             messages=[
-                {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations in JSON format."},
+                {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations only in JSON format, without any other text."},
                 {"role": "user", "content": create_prompt(destination, start_date, end_date, trip_duration)}
             ],
             temperature=0.7,

@@ -17,8 +17,13 @@ def add_expense():
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
-    # Add payee_id if not present
-    if 'payee_id' not in expense_data:
+    # Handle payees if provided
+    if 'payees' in expense_data:
+        # Ensure it's a list
+        if not isinstance(expense_data['payees'], list):
+            expense_data['payees'] = [expense_data['payees']]
+    # For backward compatibility
+    elif 'payee_id' not in expense_data:
         expense_data['payee_id'] = None
 
     # Forward the expense data to the Finance service
@@ -102,6 +107,77 @@ def convert_currency(from_currency, to_currency, amount):
             'from': from_currency,
             'to': to_currency
         }), 200  # Return 200 with fallback rate instead of error
+
+@app.route('/api/expenses/readiness/<trip_id>', methods=['GET'])
+def get_readiness_status(trip_id):
+    """Get the readiness status of all users for a trip from the finance service."""
+    try:
+        response = requests.get(
+            f"http://finance:5008/api/finance/readiness/{trip_id}",
+            timeout=5
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        return jsonify(result), 200
+    except requests.exceptions.RequestException as e:
+        print(f"Error communicating with finance service: {str(e)}")
+        return jsonify({'error': f"Error communicating with finance service: {str(e)}"}), 501
+    except Exception as e:
+        print(f"Unexpected error getting readiness status: {str(e)}")
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/expenses/readiness/<trip_id>/<user_id>', methods=['PUT'])
+def update_readiness_status(trip_id, user_id):
+    """Update the readiness status of a user for a trip."""
+    try:
+        # Get user data from request
+        user_data = request.get_json()
+        
+        # Forward the request to the finance service
+        response = requests.put(
+            f"http://finance:5008/api/finance/readiness/{trip_id}/{user_id}",
+            json=user_data,
+            timeout=5
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        return jsonify(result), 200
+    except requests.exceptions.RequestException as e:
+        print(f"Error communicating with finance service: {str(e)}")
+        return jsonify({'error': f"Error communicating with finance service: {str(e)}"}), 501
+    except Exception as e:
+        print(f"Unexpected error updating readiness status: {str(e)}")
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/expenses/calculate/<trip_id>', methods=['GET'])
+def calculate_settlement(trip_id):
+    """Calculate the settlement for a trip."""
+    try:
+        # Get the base currency from query params if provided
+        base_currency = request.args.get('base')
+        
+        # Prepare the URL with optional query parameter
+        url = f"http://finance:5008/api/finance/calculate/{trip_id}"
+        if base_currency:
+            url += f"?base={base_currency}"
+        
+        # Forward the request to the finance service
+        response = requests.get(
+            url,
+            timeout=10  # Longer timeout for calculation
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        return jsonify(result), 200
+    except requests.exceptions.RequestException as e:
+        print(f"Error communicating with finance service: {str(e)}")
+        return jsonify({'error': f"Error communicating with finance service: {str(e)}"}), 501
+    except Exception as e:
+        print(f"Unexpected error calculating settlement: {str(e)}")
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():

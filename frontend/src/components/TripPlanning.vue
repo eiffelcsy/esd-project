@@ -337,35 +337,13 @@ async function fetchRecommendations() {
 
   const tryFetch = async () => {
     try {
-      const response = await fetch(`http://localhost:5002/api/recommendations/${trip.value.id}`);
+      const response = await fetch(`http://localhost:5005/api/trips/${trip.value.id}/recommendations`);
       
-      if (response.status === 404) {
-        // If recommendations don't exist yet, request them
+      if (response.status === 202) {
+        // If recommendations are being processed, retry after delay
         if (retries === 0) {
-          console.log("Creating new recommendations for trip:", trip.value.id);
+          console.log("Generating new recommendations for trip:", trip.value.id);
           showNotification('Generating recommendations using AI... This may take up to 2 minutes.', 'info', 10000);
-          
-          const createResponse = await fetch(`http://localhost:5002/api/recommendations`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              trip_id: trip.value.id,
-              destination: trip.value.city,
-              start_date: trip.value.start_date.split('T')[0],
-              end_date: trip.value.end_date.split('T')[0]
-            })
-          });
-          
-          if (!createResponse.ok) {
-            throw new Error('Failed to request recommendations');
-          }
-          
-          // After creating, wait a moment before first retry
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          retries++;
-          return tryFetch();
         }
         
         // If we haven't exceeded max retries, try again after delay
@@ -387,13 +365,11 @@ async function fetchRecommendations() {
       const data = await response.json();
       console.log("Received recommendations:", data);
       
-      // Check if data is an array or has a recommendations property
-      if (Array.isArray(data)) {
-        recommendations.value = data;
-      } else if (data.recommendations) {
+      // Extract recommendations from the response
+      if (data.recommendations) {
         recommendations.value = data.recommendations;
       } else {
-        recommendations.value = [data]; // Wrap single recommendation in array
+        recommendations.value = data;
       }
       
       loadingRecommendations.value = false;

@@ -131,20 +131,8 @@ class EmailClient:
         user_name = body.get('user_name', 'Traveler')
         total_trip_amount = body.get('total_trip_amount', 0)
         currency = body.get('currency', 'SGD')
-        user_balance = body.get('user_balance', 0)
         to_pay = body.get('to_pay', [])
         to_receive = body.get('to_receive', [])
-        
-        # Set balance status text and color
-        if user_balance > 0:
-            balance_status = f"You are owed {abs(user_balance)} {currency}"
-            balance_color = "#34D399"  # Green
-        elif user_balance < 0:
-            balance_status = f"You owe {abs(user_balance)} {currency}"
-            balance_color = "#F87171"  # Red
-        else:
-            balance_status = "Your balance is settled"
-            balance_color = "#6B7280"  # Gray
         
         # Create HTML content
         html = f"""
@@ -171,12 +159,6 @@ class EmailClient:
                     padding: 15px;
                     border-radius: 8px;
                     margin-bottom: 20px;
-                }}
-                .balance {{
-                    font-size: 18px;
-                    font-weight: bold;
-                    color: {balance_color};
-                    margin: 10px 0;
                 }}
                 .section {{
                     margin-bottom: 20px;
@@ -214,7 +196,6 @@ class EmailClient:
             <div class="summary">
                 <p>Hello {user_name},</p>
                 <p>Your trip expense settlement is ready. The total trip expenses were <strong>{total_trip_amount} {currency}</strong>.</p>
-                <div class="balance">{balance_status}</div>
             </div>
         """
         
@@ -350,16 +331,12 @@ class EmailClient:
                                 'currency': settlement['currency']
                             })
                 
-                # Get overall user balance
-                user_balance = settlement_data.get('user_balances', {}).get(user_id, 0)
-                
                 # Prepare email content
                 email_body = {
                     'trip_id': trip_id,
                     'user_name': user.name,
                     'total_trip_amount': settlement_data.get('total_amount', 0),
                     'currency': settlement_data.get('currency', 'SGD'),
-                    'user_balance': user_balance,
                     'to_pay': to_pay,
                     'to_receive': to_receive
                 }

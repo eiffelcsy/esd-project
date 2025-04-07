@@ -17,7 +17,7 @@
             <div class="flex flex-col h-full">
               <h3 class="font-medium text-lg">{{ attraction.name }}</h3>
               <p v-if="attraction.suggested_day" class="text-sm font-medium text-blue-600 mt-1">
-                {{ attraction.suggested_day }}
+                Day {{ attraction.suggested_day }}
               </p>
               <p class="text-sm text-gray-600 mt-2 flex-grow">{{ attraction.description }}</p>
               <div class="mt-4 flex justify-end">
@@ -42,7 +42,7 @@
             <div class="flex flex-col h-full">
               <h3 class="font-medium text-lg">{{ activity.name }}</h3>
               <p v-if="activity.suggested_day" class="text-sm font-medium text-green-600 mt-1">
-                {{ activity.suggested_day }}
+                Day {{ activity.suggested_day }}
               </p>
               <p class="text-sm text-gray-600 mt-2 flex-grow">{{ activity.description }}</p>
               <div class="mt-4 flex justify-end">

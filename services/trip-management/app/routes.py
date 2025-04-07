@@ -1,7 +1,8 @@
 from flask import jsonify, request, current_app
 from datetime import datetime
 import requests
-from app.models import db, Trip
+from app.models import db, Trip, Recommendation
+from app.message_broker import publish_recommendation_request
 import os
 import logging
 
@@ -72,22 +73,29 @@ def register_routes(app):
                         # Continue even if itinerary creation failed, don't roll back the trip
                         logger.warning(f"Continuing with trip creation despite itinerary failure")
 
-                    # Also send trip creation event via RabbitMQ as a backup
-                    message_broker = current_app.message_broker
-                    message_broker.send_trip_created_event(trip.to_dict())
                 except requests.exceptions.RequestException as e:
                     # Handle connection errors to external services
                     logger.error(f"Error connecting to itinerary service: {str(e)}")
                     # Continue with trip creation even if itinerary creation failed
                     logger.warning(f"Continuing with trip creation despite connection error to itinerary service")
-                    
-                    # Try to notify via RabbitMQ since direct HTTP failed
-                    try:
-                        message_broker = current_app.message_broker
-                        message_broker.send_trip_created_event(trip.to_dict())
-                        logger.info(f"Sent trip creation event via RabbitMQ for trip: {trip.id}")
-                    except Exception as mq_err:
-                        logger.error(f"Failed to send trip creation event via RabbitMQ: {str(mq_err)}")
+                
+                # Request recommendations for the new trip
+                try:
+                    logger.info(f"Requesting recommendations for trip: {trip.id}")
+                    success = publish_recommendation_request(
+                        trip.id, 
+                        trip.city, 
+                        trip.start_date, 
+                        trip.end_date
+                    )
+                    if success:
+                        logger.info(f"Successfully queued recommendation request for trip: {trip.id}")
+                    else:
+                        logger.error(f"Failed to queue recommendation request for trip: {trip.id}")
+                except Exception as e:
+                    logger.error(f"Error requesting recommendations: {str(e)}")
+                    # Continue with trip creation even if recommendation request failed
+                    logger.warning(f"Continuing with trip creation despite recommendation request failure")
 
             return jsonify(trip.to_dict()), 201
 
@@ -131,6 +139,75 @@ def register_routes(app):
             return jsonify({"message": "Itinerary updated successfully"}), 200
         return jsonify({"error": "Failed to update itinerary"}), response.status_code
 
+    # New routes for recommendation management
+    @app.route('/api/trips/<int:trip_id>/recommendations', methods=['GET'])
+    def get_trip_recommendations(trip_id):
+        """Get recommendations for a specific trip"""
+        try:
+            # Check if trip exists
+            trip = Trip.query.get_or_404(trip_id)
+            
+            # Find recommendations for this trip
+            recommendation = Recommendation.query.filter_by(trip_id=trip_id).first()
+            
+            if not recommendation:
+                # If recommendations don't exist, initiate a request to generate them
+                logger.info(f"No recommendations found for trip_id={trip_id}, initiating request")
+                success = publish_recommendation_request(
+                    trip.id, 
+                    trip.city, 
+                    trip.start_date, 
+                    trip.end_date
+                )
+                if success:
+                    logger.info(f"Successfully queued recommendation request for trip: {trip.id}")
+                    return jsonify({
+                        "status": "processing",
+                        "message": "Recommendations are being generated. Please try again in a few moments."
+                    }), 202  # Accepted
+                else:
+                    logger.error(f"Failed to queue recommendation request for trip: {trip.id}")
+                    return jsonify({
+                        "error": "Failed to queue recommendation request"
+                    }), 500
+            
+            # Return the recommendations
+            return jsonify(recommendation.to_dict()), 200
+            
+        except Exception as e:
+            logger.error(f"Error fetching recommendations: {str(e)}")
+            return jsonify({"error": "Internal server error", "details": str(e)}), 500
+    
+    @app.route('/api/trips/<int:trip_id>/recommendations', methods=['POST'])
+    def request_trip_recommendations(trip_id):
+        """Request recommendations for a specific trip"""
+        try:
+            # Check if trip exists
+            trip = Trip.query.get_or_404(trip_id)
+            
+            # Publish a request for recommendations
+            success = publish_recommendation_request(
+                trip.id, 
+                trip.city, 
+                trip.start_date, 
+                trip.end_date
+            )
+            
+            if not success:
+                return jsonify({
+                    "error": "Failed to queue recommendation request"
+                }), 500
+                
+            return jsonify({
+                "status": "accepted",
+                "message": "Recommendation request has been queued",
+                "trip_id": trip_id
+            }), 202  # Accepted
+            
+        except Exception as e:
+            logger.error(f"Error requesting recommendations: {str(e)}")
+            return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
     @app.route('/api/trips/<int:trip_id>', methods=['DELETE'])
     def delete_trip(trip_id):
         try:
@@ -145,6 +222,15 @@ def register_routes(app):
                 except requests.exceptions.RequestException as e:
                     logger.error(f"Error connecting to itinerary service: {str(e)}")
                     # Continue with trip deletion even if itinerary deletion fails
+            
+            # Delete recommendations for this trip
+            try:
+                recommendation = Recommendation.query.filter_by(trip_id=trip_id).first()
+                if recommendation:
+                    db.session.delete(recommendation)
+            except Exception as e:
+                logger.error(f"Error deleting recommendations: {str(e)}")
+                # Continue with trip deletion even if recommendation deletion fails
             
             # Delete trip from database
             db.session.delete(trip)

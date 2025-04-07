@@ -18,10 +18,6 @@ def register_routes(app):
     # Gets conversion rates for local currency
     @app.route('/api/finance/rates', methods=['GET'])
     def get_rates():
-        # TEST response
-        if False:
-            response = requests.get(f"{BASE_URL}/{API_KEY}/latest/SGD").json()
-            return jsonify({"result": "success", "conversion_rates": response["conversion_rates"]})
         base_currency = request.args.get('base', 'SGD')
         target_currencies = request.args.get('symbols')
         
@@ -83,16 +79,23 @@ def register_routes(app):
             # Get the base currency from query params, default to SGD
             base_currency = request.args.get('base', 'SGD')
 
+            logger.info(f"Calculating settlement for trip {trip_id} with base currency {base_currency}")
+            
             stmt = db.select(Expense).where(Expense.trip_id == trip_id)
             expenses = db.session.scalars(stmt).all()  
                 
             if not expenses:
+                logger.info(f"No expenses found for trip {trip_id}")
                 return jsonify({
                     'trip_id': trip_id,
                     'message': 'No expenses found for this trip',
                     'total_amount': 0,
-                    'currency': base_currency
+                    'currency': base_currency,
+                    'settlements': [],
+                    'user_balances': {}
                 }), 200 
+            
+            logger.info(f"Found {len(expenses)} expenses for trip {trip_id}")
             
             # Initialize total amount
             total_amount = 0
@@ -100,23 +103,57 @@ def register_routes(app):
             # Get the list of users for a given trip
             users = []
             for e in expenses:
+                # Add payer
                 if e.user_id not in users:
                     users.append(e.user_id)
-                if e.payee_id and e.payee_id not in users:
-                    users.append(e.payee_id)
                 
+                # Add payees from the payees list
+                try:
+                    payees = e.payees
+                    if payees and isinstance(payees, list):
+                        for payee_id in payees:
+                            if payee_id != "all" and payee_id not in users:
+                                users.append(payee_id)
+                except Exception as payee_error:
+                    # Handle any issues with payees property
+                    logger.error(f"Error processing payees: {str(payee_error)}")
+                
+                # Legacy support for payee_id field
+                if e.payee_id and e.payee_id != 'all' and e.payee_id not in users:
+                    users.append(e.payee_id)
+            
+            logger.info(f"Found {len(users)} users for trip {trip_id}: {users}")
+            
+            if not users:
+                logger.warning(f"No users found for trip {trip_id}")
+                return jsonify({
+                    'trip_id': trip_id,
+                    'message': 'No users found for this trip',
+                    'total_amount': 0,
+                    'currency': base_currency,
+                    'settlements': [],
+                    'user_balances': {}
+                }), 200
+            
             # Convert all expenses to base currency and sum them up
             for expense in expenses:
-                if expense.base_currency == base_currency:
+                try:
+                    if expense.base_currency == base_currency:
+                        amount = expense.amount
+                    else:
+                        # Convert to base currency using your ExchangeRateClient
+                        amount = ExchangeRateClient.convert_amount(
+                            from_currency=expense.base_currency,
+                            to_currency=base_currency,
+                            amount=expense.amount
+                        )
+                    total_amount += amount
+                except Exception as conversion_error:
+                    logger.error(f"Error converting amount for expense {expense.trip_id}, {expense.user_id}, {expense.date}: {str(conversion_error)}")
+                    # Use original amount as fallback
                     total_amount += expense.amount
-                else:
-                    # Convert to base currency using your ExchangeRateClient
-                    converted_amount = ExchangeRateClient.convert_amount(
-                        from_currency=expense.base_currency,
-                        to_currency=base_currency,
-                        amount=expense.amount
-                    )
-                    total_amount += converted_amount
+            
+            logger.info(f"Total amount for trip {trip_id}: {total_amount} {base_currency}")
             
             # Get user names/emails from the UserReadiness model for better display
             users_info = {}
@@ -128,8 +165,9 @@ def register_routes(app):
                         'name': record.name or f"User {record.user_id}",
                         'email': record.email
                     }
-            except Exception as e:
-                print(f"Error getting user readiness records: {str(e)}")
+                logger.info(f"Retrieved user info for {len(users_info)} users")
+            except Exception as user_info_error:
+                logger.error(f"Error getting user readiness records: {str(user_info_error)}")
                 
             # Create balance sheet to track how much each user has spent and owes
             balances = {user_id: 0 for user_id in users}
@@ -146,22 +184,98 @@ def register_routes(app):
                         amount=expense.amount
                     )
                 
-                # If expense has a specific payee, it means the payer (user_id) paid for the payee
-                if expense.payee_id and expense.payee_id != 'all':
-                    # Increase payer's balance (they are owed money)
-                    balances[expense.user_id] += amount
-                    # Decrease payee's balance (they owe money)
-                    balances[expense.payee_id] -= amount
-                else:
-                    # If no specific payee or payee_id is 'all', split among all users evenly
-                    payer_share = amount / len(users)
-                    # The payer paid the full amount but only owes their share
-                    balances[expense.user_id] += amount - payer_share
+                logger.info(f"Processing expense: User {expense.user_id} paid {amount} {base_currency} for {expense.description}")
+                
+                # Get the list of payees from the expense
+                try:
+                    payees = expense.payees
+                    logger.info(f"  Payees: {payees}")
                     
-                    # Everyone else owes their share to the payer
+                    # Check if we have specific payees or if it's "all"
+                    if payees and (len(payees) == 1 and payees[0] == "all" or "all" in payees):
+                        # Split the expense among all users evenly
+                        payer_share = amount / len(users)
+                        
+                        # The payer paid the full amount but only owes their share
+                        old_balance = balances[expense.user_id]
+                        balances[expense.user_id] += amount - payer_share
+                        logger.info(f"  Split among all: {expense.user_id} balance: {old_balance} → {balances[expense.user_id]} (paid {amount}, share {payer_share})")
+                        
+                        # Everyone else owes their share to the payer
+                        for user_id in users:
+                            if user_id != expense.user_id:
+                                old_balance = balances[user_id]
+                                balances[user_id] -= payer_share
+                                logger.info(f"    {user_id} balance: {old_balance} → {balances[user_id]} (share {payer_share})")
+                    
+                    elif payees and isinstance(payees, list) and len(payees) > 0:
+                        # Expense is split among specific payees
+                        payee_share = amount / len(payees)
+                        logger.info(f"  Split among specific payees: each pays {payee_share}")
+                        
+                        # Increase payer's balance by full amount (they are owed money)
+                        old_balance = balances[expense.user_id]
+                        balances[expense.user_id] += amount
+                        logger.info(f"  Payer {expense.user_id} balance: {old_balance} → {balances[expense.user_id]} (paid {amount})")
+                        
+                        # If payer is also in the payees list, subtract their share
+                        if expense.user_id in payees:
+                            old_balance = balances[expense.user_id]
+                            balances[expense.user_id] -= payee_share
+                            logger.info(f"    (Payer also a payee) {expense.user_id} balance adjustment: {old_balance} → {balances[expense.user_id]} (share {payee_share})")
+                        
+                        # Each payee owes their share
+                        for payee_id in payees:
+                            if payee_id != expense.user_id and payee_id in balances:  # Make sure payee_id is valid
+                                old_balance = balances[payee_id]
+                                balances[payee_id] -= payee_share
+                                logger.info(f"    Payee {payee_id} balance: {old_balance} → {balances[payee_id]} (share {payee_share})")
+                    
+                    # Legacy support for single payee_id
+                    elif expense.payee_id and expense.payee_id != 'all' and expense.payee_id in balances:
+                        # Increase payer's balance (they are owed money)
+                        old_balance = balances[expense.user_id]
+                        balances[expense.user_id] += amount
+                        logger.info(f"  Single payee (legacy): {expense.user_id} balance: {old_balance} → {balances[expense.user_id]}")
+                        
+                        # Decrease payee's balance (they owe money)
+                        old_balance = balances[expense.payee_id]
+                        balances[expense.payee_id] -= amount
+                        logger.info(f"    Payee {expense.payee_id} balance: {old_balance} → {balances[expense.payee_id]}")
+                    else:
+                        # Fallback to splitting among all users evenly
+                        logger.info(f"  Fallback to split among all")
+                        payer_share = amount / len(users)
+                        old_balance = balances[expense.user_id]
+                        balances[expense.user_id] += amount - payer_share
+                        logger.info(f"  Payer {expense.user_id} balance: {old_balance} → {balances[expense.user_id]}")
+                        
+                        for user_id in users:
+                            if user_id != expense.user_id:
+                                old_balance = balances[user_id]
+                                balances[user_id] -= payer_share
+                                logger.info(f"    User {user_id} balance: {old_balance} → {balances[user_id]}")
+                except Exception as err:
+                    # Log the error and fallback to splitting evenly
+                    logger.error(f"Error calculating balance for expense {expense.trip_id}, {expense.user_id}, {expense.date}: {str(err)}")
+                    
+                    # Fallback to splitting evenly
+                    logger.info(f"  Error fallback to split among all")
+                    payer_share = amount / len(users)
+                    old_balance = balances[expense.user_id]
+                    balances[expense.user_id] += amount - payer_share
+                    logger.info(f"  Payer {expense.user_id} balance: {old_balance} → {balances[expense.user_id]}")
+                    
                     for user_id in users:
                         if user_id != expense.user_id:
+                            old_balance = balances[user_id]
                             balances[user_id] -= payer_share
+                            logger.info(f"    User {user_id} balance: {old_balance} → {balances[user_id]}")
+            
+            # Log final balances
+            logger.info("Final balances:")
+            for user_id, balance in balances.items():
+                logger.info(f"  User {user_id}: {balance} {base_currency}")
             
             # Create settlement plan - who pays whom
             settlements = []
@@ -207,20 +321,37 @@ def register_routes(app):
                     j -= 1
             
             # Prepare response with settlement details
+            settlements_formatted = []
+            for settlement in settlements:
+                settlements_formatted.append({
+                    'from': str(settlement['from']),
+                    'from_name': settlement['from_name'],
+                    'to': str(settlement['to']),
+                    'to_name': settlement['to_name'],
+                    'amount': round(float(settlement['amount']), 2),
+                    'currency': settlement['currency']
+                })
+                
             response_data = {
-                'trip_id': trip_id,
-                'total_amount': round(total_amount, 2),
+                'trip_id': str(trip_id),
+                'total_amount': round(float(total_amount), 2),
                 'currency': base_currency,
                 'users': len(users),
-                'user_balances': {user_id: round(balance, 2) for user_id, balance in balances.items()},
-                'user_names': {user_id: users_info.get(user_id, {}).get('name', f"User {user_id}") for user_id in users},
-                'settlements': settlements
+                'user_names': {str(user_id): users_info.get(user_id, {}).get('name', f"User {user_id}") for user_id in users},
+                'settlements': settlements_formatted
             }
             
+            logger.info(f"Settlement calculation completed for trip {trip_id} with {len(settlements)} settlements")
             return jsonify(response_data), 200
                 
         except Exception as e:
-            return jsonify({'error': str(e)}), 400
+            logger.error(f"Error calculating settlement for trip {trip_id}: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': f"Error calculating settlement: {str(e)}",
+                'trip_id': trip_id,
+                'settlements': [],
+                'user_balances': {}
+            }), 500
         
     # Add route to add expense into database
     @app.route('/api/finance/<trip_id>/add', methods=['POST'])
@@ -232,7 +363,7 @@ def register_routes(app):
             if missing_fields:
                 return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
-            # Ensure payee_id is present in data even if null
+            # Ensure payee_id is present in data even if null (for backward compatibility)
             if 'payee_id' not in data:
                 data['payee_id'] = None
 
@@ -474,136 +605,3 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error sending settlement email: {str(e)}")
             return False
-
-    # Get all trips for a user
-    @app.route('/api/finance/test-trip-group/<trip_id>', methods=['GET'])
-    def test_trip_group(trip_id):
-        """Test endpoint to get a trip's group_id"""
-        try:
-            # Get the trip details
-            trip_details = TripClient.get_trip_details(trip_id)
-            
-            if not trip_details:
-                return jsonify({
-                    'error': 'Failed to retrieve trip details'
-                }), 404
-                
-            if 'group_id' not in trip_details or not trip_details['group_id']:
-                return jsonify({
-                    'trip_id': trip_id,
-                    'message': 'No group_id associated with this trip',
-                    'trip_details': trip_details
-                }), 200
-            
-            group_id = trip_details['group_id']
-            
-            # Try to get group members
-            try:
-                group_service_url = f"https://personal-ekdcuwio.outsystemscloud.com/GroupMicroservice/rest/GroupService/groups/{group_id}/users"
-                response = requests.get(group_service_url)
-                
-                if response.ok:
-                    group_members = response.json()
-                    return jsonify({
-                        'trip_id': trip_id,
-                        'group_id': group_id,
-                        'group_members': group_members,
-                        'trip_details': trip_details
-                    }), 200
-                else:
-                    return jsonify({
-                        'trip_id': trip_id,
-                        'group_id': group_id,
-                        'error': f'Failed to retrieve group members. Status: {response.status_code}',
-                        'trip_details': trip_details
-                    }), 200
-            except Exception as e:
-                return jsonify({
-                    'trip_id': trip_id,
-                    'group_id': group_id,
-                    'error': f'Error retrieving group members: {str(e)}',
-                    'trip_details': trip_details
-                }), 200
-            
-        except Exception as e:
-            return jsonify({
-                'error': str(e)
-            }), 500 
-
-    # Test endpoint to manually trigger a settlement email for a specific user
-    @app.route('/api/finance/test-email/<trip_id>/<user_id>', methods=['GET'])
-    def test_settlement_email(trip_id, user_id):
-        try:
-            # Get settlement details
-            settlement_response = get_all_expenses(trip_id)
-            
-            if not settlement_response or not hasattr(settlement_response, '__getitem__') or settlement_response[1] != 200:
-                return jsonify({
-                    'error': 'Could not calculate settlement'
-                }), 500
-            
-            settlement_data = settlement_response[0].json
-            
-            # Get user readiness record
-            stmt = db.select(UserReadiness).where(UserReadiness.trip_id == trip_id, UserReadiness.user_id == user_id)
-            user = db.session.scalars(stmt).first()
-            
-            if not user:
-                return jsonify({
-                    'error': f'User {user_id} not found for trip {trip_id}'
-                }), 404
-            
-            # Prepare user-specific settlement details
-            to_pay = []
-            if 'settlements' in settlement_data:
-                for settlement in settlement_data['settlements']:
-                    if settlement['from'] == user_id:
-                        # This user needs to pay
-                        to_pay.append({
-                            'to': settlement['to_name'],
-                            'amount': settlement['amount'],
-                            'currency': settlement['currency']
-                        })
-            
-            # Get what others need to pay this user
-            to_receive = []
-            if 'settlements' in settlement_data:
-                for settlement in settlement_data['settlements']:
-                    if settlement['to'] == user_id:
-                        # This user will receive payment
-                        to_receive.append({
-                            'from': settlement['from_name'],
-                            'amount': settlement['amount'],
-                            'currency': settlement['currency']
-                        })
-            
-            # Get overall user balance
-            user_balance = settlement_data.get('user_balances', {}).get(user_id, 0)
-            
-            # Prepare email content
-            email_body = {
-                'trip_id': trip_id,
-                'user_name': user.name,
-                'total_trip_amount': settlement_data.get('total_amount', 0),
-                'currency': settlement_data.get('currency', 'SGD'),
-                'user_balance': user_balance,
-                'to_pay': to_pay,
-                'to_receive': to_receive
-            }
-            
-            # Send email
-            response = EmailClient.send_settlement_email(
-                to_email=user.email,
-                subject=f'Trip Settlement Details for Trip #{trip_id} (TEST)',
-                body=email_body
-            )
-            
-            return jsonify({
-                'message': 'Settlement email sent',
-                'email_result': response,
-                'email_content': email_body
-            }), 200
-            
-        except Exception as e:
-            logger.error(f"Error sending test settlement email: {str(e)}")
-            return jsonify({'error': str(e)}), 500 

@@ -1,8 +1,12 @@
 <template>
-  <div class="flex flex-col">
-    <nav class="flex gap-4 p-4">
+  <div class="flex flex-col container mx-auto">
+    <nav class="flex gap-4 p-4 justify-between items-center mb-4">
       <Button variant="link">
         <router-link :to="{ name: 'trip-planning', params: { tripId: route.params.tripId }}">Planning</router-link>
+      </Button>
+      <Button variant="secondary">
+        <ArrowLeft class="h-4 w-4 mr-1" />
+        <router-link to="/groups">Back to Groups</router-link>
       </Button>
     </nav>
     <div class="mt-8 flex flex-col gap-4 container px-8 mx-auto">
@@ -127,9 +131,9 @@
               </div>
               <div class="space-y-2">
                 <Label for="payee">Paid for</Label>
-                <Select v-model="newExpense.payee_id">
+                <Select v-model="newExpense.payees" multiple>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select payee (optional)" />
+                    <SelectValue placeholder="Select payees" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Everyone (Split equally)</SelectItem>
@@ -261,15 +265,6 @@
             </div>
           </div>
         </div>
-        <div v-if="userBalances" class="mt-4 border-t pt-4">
-          <h3 class="font-semibold mb-2">Balance Summary</h3>
-          <div v-for="(balance, userId) in userBalances" :key="userId" class="flex justify-between items-center py-1">
-            <span>{{ userNames[userId] || `User ${userId}` }}</span>
-            <span :class="balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-gray-600'">
-              {{ balance > 0 ? '+' : '' }}{{ balance }} {{ settlementCurrency }}
-            </span>
-          </div>
-        </div>
       </DialogContent>
     </Dialog>
   </div>
@@ -284,6 +279,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
+import { PencilIcon, TrashIcon, RefreshCw, ArrowLeft } from "lucide-vue-next";
 
 const route = useRoute();
 const trip = ref({});
@@ -292,8 +288,6 @@ const groupMembers = ref([]);
 const currentUserId = ref(null);
 const showSettlementModal = ref(false);
 const settlementDetails = ref([]);
-const userBalances = ref({});
-const userNames = ref({});
 const settlementCurrency = ref('SGD');
 const displayCurrency = ref('SGD');
 
@@ -303,7 +297,7 @@ const newExpense = ref({
   description: "",
   category: "",
   user_id: "",
-  payee_id: "all",
+  payees: ["all"],
 });
 
 const allMembersReady = computed(() => {
@@ -319,8 +313,6 @@ const fetchTripDetails = async () => {
     }
     const tripData = await tripResponse.json();
     
-    // Get the local currency based on the destination city
-    // For now we'll use a simple mapping, but this should be enhanced with a proper currency service
     const currencyMap = {
       'Tokyo': 'JPY',
       'Seoul': 'KRW',
@@ -437,11 +429,19 @@ const fetchExpenses = async () => {
       const payer = groupMembers.value.find(m => String(m.id) === String(expense.user_id));
       const payerName = payer ? payer.name : `User ${expense.user_id}`;
 
-      // Find the payee's name from group members if it's not 'all'
-      let payeeName = 'Everyone';
-      if (expense.payee_id && expense.payee_id !== 'all') {
+      // Process payees information
+      let payeeNames = 'Everyone';
+      
+      if (expense.payees && Array.isArray(expense.payees) && !expense.payees.includes("all")) {
+        const payeesList = expense.payees.map(payeeId => {
+          const payee = groupMembers.value.find(m => String(m.id) === String(payeeId));
+          return payee ? payee.name : `User ${payeeId}`;
+        });
+        payeeNames = payeesList.join(", ");
+      } else if (expense.payee_id && expense.payee_id !== 'all') {
+        // Legacy support for older expenses with single payee_id
         const payee = groupMembers.value.find(m => String(m.id) === String(expense.payee_id));
-        payeeName = payee ? payee.name : `User ${expense.payee_id}`;
+        payeeNames = payee ? payee.name : `User ${expense.payee_id}`;
       }
 
       return {
@@ -453,7 +453,7 @@ const fetchExpenses = async () => {
         displayCurrency: displayCurrency.value,
         category: expense.category || "Other",
         addedBy: payerName,
-        payee: payeeName,
+        payee: payeeNames,
         date: expense.date,
         location: expense.location,
         is_paid: expense.is_paid
@@ -466,8 +466,8 @@ const fetchExpenses = async () => {
 
 const fetchGroupMembers = async () => {
   try {
-    // Get readiness status from finance service
-    const readinessResponse = await fetch(`http://localhost:5008/api/finance/readiness/${route.params.tripId}`);
+    // Get readiness status from expense-management service instead of finance service
+    const readinessResponse = await fetch(`http://localhost:5007/api/expenses/readiness/${route.params.tripId}`);
     
     if (readinessResponse.ok) {
       const data = await readinessResponse.json();
@@ -507,7 +507,7 @@ const addExpense = async () => {
       description: newExpense.value.description,
       is_paid: false,
       category: newExpense.value.category,
-      payee_id: newExpense.value.payee_id === "all" ? null : String(newExpense.value.payee_id)
+      payees: newExpense.value.payees.includes("all") ? ["all"] : newExpense.value.payees.map(id => String(id))
     };
 
     console.log('Sending expense data:', expenseData);
@@ -531,7 +531,7 @@ const addExpense = async () => {
       description: "",
       category: "",
       user_id: currentUserId.value,
-      payee_id: "all",
+      payees: ["all"],
     };
     await fetchExpenses();
   } catch (error) {
@@ -565,7 +565,8 @@ const markAsReady = async () => {
     // Ensure user ID is sent as a string to match DB column type
     const userId = String(currentUserId.value);
     
-    const response = await fetch(`http://localhost:5008/api/finance/readiness/${route.params.tripId}/${userId}`, {
+    // Use expense-management service instead of directly calling finance service
+    const response = await fetch(`http://localhost:5007/api/expenses/readiness/${route.params.tripId}/${userId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -604,19 +605,24 @@ const markAsReady = async () => {
 
 const calculateSettlement = async () => {
   try {
-    const response = await fetch(`http://localhost:5008/api/finance/calculate/${route.params.tripId}`);
+    // First log what we're doing
+    console.log(`Calculating settlement for trip ${route.params.tripId}...`);
+    
+    // Use expense-management service instead of finance service directly
+    const response = await fetch(`http://localhost:5007/api/expenses/calculate/${route.params.tripId}`);
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Settlement calculation error (${response.status}):`, errorText);
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
     
     const data = await response.json();
+    console.log('Settlement data received:', data);
     
     // Store the settlements data
     settlementDetails.value = data.settlements || [];
     
-    // Store user balances and names for display
-    userBalances.value = data.user_balances || {};
-    userNames.value = data.user_names || {};
+    // Store currency
     settlementCurrency.value = data.currency || 'SGD';
     
   } catch (error) {
