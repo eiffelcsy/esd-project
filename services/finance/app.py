@@ -34,11 +34,27 @@ def health_check():
 # Create tables if they don't exist
 with app.app_context():
     try:
-        # First check if the tables exist
+        # Create tables
+        logger.info("Creating database tables if they don't exist")
         db.create_all()
         
+        # Verify tables exist 
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.engine)
+        
+        # Check if expenses table exists
+        if not inspector.has_table('expenses'):
+            logger.error("Failed to create 'expenses' table")
+        else:
+            logger.info("'expenses' table exists")
+            
+        # Check if user_readiness table exists
+        if not inspector.has_table('user_readiness'):
+            logger.error("Failed to create 'user_readiness' table")
+        else:
+            logger.info("'user_readiness' table exists")
+            
         # Then check for and add the payees_json column if needed
-        from sqlalchemy import text
         try:
             logger.info("Checking if payees_json column exists")
             # Check if column exists
@@ -68,6 +84,7 @@ with app.app_context():
             db.session.rollback()
     except Exception as e:
         logger.error(f"Error initializing database: {str(e)}")
+        logger.exception(e)  # Log the full stack trace for better debugging
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5008)

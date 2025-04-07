@@ -151,6 +151,26 @@ def update_readiness_status(trip_id, user_id):
         print(f"Unexpected error updating readiness status: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
+@app.route('/api/expenses/readiness/<trip_id>/<user_id>', methods=['GET'])
+def get_user_readiness_status(trip_id, user_id):
+    """Get the readiness status of a specific user for a trip."""
+    try:
+        # Forward the request to the finance service
+        response = requests.get(
+            f"http://finance:5008/api/finance/readiness/{trip_id}/{user_id}",
+            timeout=5
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        return jsonify(result), 200
+    except requests.exceptions.RequestException as e:
+        print(f"Error communicating with finance service: {str(e)}")
+        return jsonify({'error': f"Error communicating with finance service: {str(e)}"}), 501
+    except Exception as e:
+        print(f"Unexpected error getting user readiness status: {str(e)}")
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
 @app.route('/api/expenses/calculate/<trip_id>', methods=['GET'])
 def calculate_settlement(trip_id):
     """Calculate the settlement for a trip."""
