@@ -23,9 +23,51 @@
               <span class="font-semibold">Local Currency:</span>
               <span>{{ trip.localCurrency }}</span>
             </div>
+            <div class="flex justify-between items-center">
+              <span class="font-semibold">Display Currency:</span>
+              <Select v-model="displayCurrency" @update:modelValue="updateDisplayCurrency">
+                <SelectTrigger class="w-[180px]">
+                  <SelectValue :placeholder="displayCurrency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Common Currencies</SelectLabel>
+                    <SelectItem value="USD">USD - US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR - Euro</SelectItem>
+                    <SelectItem value="JPY">JPY - Japanese Yen</SelectItem>
+                    <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    <SelectItem value="AUD">AUD - Australian Dollar</SelectItem>
+                    <SelectItem value="CAD">CAD - Canadian Dollar</SelectItem>
+                    <SelectItem value="CHF">CHF - Swiss Franc</SelectItem>
+                    <SelectItem value="CNY">CNY - Chinese Yuan</SelectItem>
+                    <SelectItem value="HKD">HKD - Hong Kong Dollar</SelectItem>
+                    <SelectItem value="NZD">NZD - New Zealand Dollar</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Asian Currencies</SelectLabel>
+                    <SelectItem value="SGD">SGD - Singapore Dollar</SelectItem>
+                    <SelectItem value="KRW">KRW - South Korean Won</SelectItem>
+                    <SelectItem value="TWD">TWD - Taiwan Dollar</SelectItem>
+                    <SelectItem value="THB">THB - Thai Baht</SelectItem>
+                    <SelectItem value="MYR">MYR - Malaysian Ringgit</SelectItem>
+                    <SelectItem value="IDR">IDR - Indonesian Rupiah</SelectItem>
+                    <SelectItem value="PHP">PHP - Philippine Peso</SelectItem>
+                    <SelectItem value="VND">VND - Vietnamese Dong</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Other Major Currencies</SelectLabel>
+                    <SelectItem value="INR">INR - Indian Rupee</SelectItem>
+                    <SelectItem value="BRL">BRL - Brazilian Real</SelectItem>
+                    <SelectItem value="RUB">RUB - Russian Ruble</SelectItem>
+                    <SelectItem value="ZAR">ZAR - South African Rand</SelectItem>
+                    <SelectItem value="MXN">MXN - Mexican Peso</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
             <div class="flex justify-between">
               <span class="font-semibold">Exchange Rate:</span>
-              <span>1 {{ trip.localCurrency }} = {{ trip.exchangeRate }} USD</span>
+              <span>1 {{ trip.localCurrency }} = {{ trip.exchangeRate }} {{ displayCurrency }}</span>
             </div>
           </div>
         </CardContent>
@@ -55,7 +97,7 @@
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem :value="trip.localCurrency">{{ trip.localCurrency }}</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem :value="displayCurrency">{{ displayCurrency }}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -138,7 +180,7 @@
                 <div class="text-right">
                   <p class="font-medium">{{ expense.amount }} {{ expense.currency }}</p>
                   <p class="text-sm text-gray-500">
-                    {{ expense.amountUSD }} USD
+                    {{ expense.convertedAmount }} {{ expense.displayCurrency }}
                   </p>
                 </div>
               </div>
@@ -241,7 +283,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 
 const route = useRoute();
 const trip = ref({});
@@ -253,6 +295,7 @@ const settlementDetails = ref([]);
 const userBalances = ref({});
 const userNames = ref({});
 const settlementCurrency = ref('SGD');
+const displayCurrency = ref('SGD');
 
 const newExpense = ref({
   amount: "",
@@ -269,11 +312,87 @@ const allMembersReady = computed(() => {
 
 const fetchTripDetails = async () => {
   try {
-    const response = await fetch(`http://localhost:5006/api/itinerary/${route.params.tripId}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+    // First get trip details from trip-management service
+    const tripResponse = await fetch(`http://localhost:5005/api/trips/${route.params.tripId}`);
+    if (!tripResponse.ok) {
+      throw new Error(`HTTP error! Status: ${tripResponse.status}`);
     }
-    trip.value = await response.json();
+    const tripData = await tripResponse.json();
+    
+    // Get the local currency based on the destination city
+    // For now we'll use a simple mapping, but this should be enhanced with a proper currency service
+    const currencyMap = {
+      'Tokyo': 'JPY',
+      'Seoul': 'KRW',
+      'Bangkok': 'THB',
+      'Singapore': 'SGD',
+      'Kuala Lumpur': 'MYR',
+      'Jakarta': 'IDR',
+      'Manila': 'PHP',
+      'Hong Kong': 'HKD',
+      'Beijing': 'CNY',
+      'Shanghai': 'CNY',
+      'Osaka': 'JPY',
+      'Taipei': 'TWD',
+      'Ho Chi Minh City': 'VND',
+      'Hanoi': 'VND',
+      'Bali': 'IDR'
+    };
+    
+    const localCurrency = currencyMap[tripData.city] || 'USD';
+    
+    // Get exchange rate from expense-management service
+    try {
+      console.log(`Fetching exchange rate for ${localCurrency} to USD`);
+      const rateResponse = await fetch(`http://localhost:5007/api/expenses/convert/${localCurrency}/USD/1.0`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      console.log('Rate response status:', rateResponse.status);
+      
+      let exchangeRate = 1;
+      if (rateResponse.ok) {
+        const rateData = await rateResponse.json();
+        console.log('Rate data received:', rateData);
+        
+        if (rateData && typeof rateData === 'object') {
+          if ('rate' in rateData) {
+            exchangeRate = rateData.rate;
+          } else if ('converted_amount' in rateData) {
+            exchangeRate = rateData.converted_amount;
+          } else if ('error' in rateData) {
+            console.warn('Exchange rate error:', rateData.error);
+            // Use fallback rate of 1.0
+          }
+        }
+      } else {
+        console.error('Failed to fetch exchange rate:', await rateResponse.text());
+      }
+      
+      // Update trip data with currency information
+      trip.value = {
+        ...tripData,
+        destination: tripData.city,
+        localCurrency,
+        exchangeRate: Number(exchangeRate).toFixed(4)
+      };
+      
+      // Set default currency for new expenses
+      newExpense.value.currency = localCurrency;
+    } catch (error) {
+      console.error('Error fetching exchange rate:', error);
+      // Set default values in case of error
+      trip.value = {
+        ...tripData,
+        destination: tripData.city,
+        localCurrency,
+        exchangeRate: '1.0000'
+      };
+      newExpense.value.currency = localCurrency;
+    }
+    
     await fetchExpenses();
     await fetchGroupMembers();
   } catch (error) {
@@ -283,27 +402,62 @@ const fetchTripDetails = async () => {
 
 const fetchExpenses = async () => {
   try {
-    // Use the expense-management service endpoint to get expenses
     const response = await fetch(`http://localhost:5007/api/expenses/${route.params.tripId}`);
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
     const data = await response.json();
-    // Map the expenses to the format expected by the frontend
-    expenses.value = data.expenses.map(expense => ({
-      id: `${expense.user_id}-${expense.date}`,
-      description: expense.description || "No description",
-      amount: expense.amount,
-      currency: expense.base_currency,
-      amountUSD: expense.amount, // This would need proper conversion
-      category: expense.category || "Other",
-      addedBy: expense.user_id,
-      payee: expense.payee_id === 'all' ? 'Everyone' : (
-        expense.payee_id ? groupMembers.value.find(m => String(m.id) === String(expense.payee_id))?.name || `User ${expense.payee_id}` : 'Everyone'
-      ),
-      date: expense.date,
-      location: expense.location,
-      is_paid: expense.is_paid
+    
+    expenses.value = await Promise.all(data.expenses.map(async expense => {
+      // Convert amount to display currency if it's different from the base currency
+      let convertedAmount = expense.amount;
+      if (expense.base_currency !== displayCurrency.value) {
+        try {
+          const conversionResponse = await fetch(
+            `http://localhost:5007/api/expenses/convert/${expense.base_currency}/${displayCurrency.value}/${expense.amount.toFixed(2)}`,
+            {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json'
+              }
+            }
+          );
+          if (conversionResponse.ok) {
+            const conversionData = await conversionResponse.json();
+            convertedAmount = conversionData.converted_amount || conversionData.rate * expense.amount;
+          }
+        } catch (error) {
+          console.error("Error converting amount:", error);
+          // Fallback to using the stored exchange rate
+          convertedAmount = expense.amount * Number(trip.value.exchangeRate);
+        }
+      }
+
+      // Find the payer's name from group members
+      const payer = groupMembers.value.find(m => String(m.id) === String(expense.user_id));
+      const payerName = payer ? payer.name : `User ${expense.user_id}`;
+
+      // Find the payee's name from group members if it's not 'all'
+      let payeeName = 'Everyone';
+      if (expense.payee_id && expense.payee_id !== 'all') {
+        const payee = groupMembers.value.find(m => String(m.id) === String(expense.payee_id));
+        payeeName = payee ? payee.name : `User ${expense.payee_id}`;
+      }
+
+      return {
+        id: `${expense.user_id}-${expense.date}`,
+        description: expense.description || "No description",
+        amount: expense.amount,
+        currency: expense.base_currency,
+        convertedAmount: Number(convertedAmount).toFixed(2),
+        displayCurrency: displayCurrency.value,
+        category: expense.category || "Other",
+        addedBy: payerName,
+        payee: payeeName,
+        date: expense.date,
+        location: expense.location,
+        is_paid: expense.is_paid
+      };
     }));
   } catch (error) {
     console.error("Error fetching expenses:", error);
@@ -476,6 +630,37 @@ const viewSettlementDetails = () => {
 
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString();
+};
+
+const updateDisplayCurrency = async () => {
+  try {
+    // Update exchange rate for the new display currency
+    const rateResponse = await fetch(
+      `http://localhost:5007/api/expenses/convert/${trip.value.localCurrency}/${displayCurrency.value}/1.0`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
+    );
+    
+    if (rateResponse.ok) {
+      const rateData = await rateResponse.json();
+      if (rateData && typeof rateData === 'object') {
+        if ('rate' in rateData) {
+          trip.value.exchangeRate = Number(rateData.rate).toFixed(4);
+        } else if ('converted_amount' in rateData) {
+          trip.value.exchangeRate = Number(rateData.converted_amount).toFixed(4);
+        }
+      }
+    }
+    
+    // Refresh expenses to update converted amounts
+    await fetchExpenses();
+  } catch (error) {
+    console.error('Error updating display currency:', error);
+  }
 };
 
 onMounted(() => {

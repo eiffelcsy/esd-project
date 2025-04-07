@@ -18,7 +18,33 @@ logger = logging.getLogger(__name__)
 
 # Initialize the Flask application
 app = Flask(__name__)
-CORS(app)
+
+# Configure CORS with proper error handling
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:5173", "http://localhost:5174"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Accept"],
+        "supports_credentials": True,
+        "expose_headers": ["Content-Type"]
+    }
+})
+
+# Add error handlers
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({"error": "Resource not found"}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({"error": "Internal server error"}), 500
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # Log environment variables (excluding sensitive info)
 logger.info("Environment variables:")
@@ -135,6 +161,11 @@ def purge_recommendation_requests_queue():
 # Create tables if they don't exist
 try:
     with app.app_context():
+        # Drop existing tables
+        db.drop_all()
+        logger.info("Dropped existing database tables")
+        
+        # Create tables with updated schema
         db.create_all()
         logger.info("Database tables created successfully")
         

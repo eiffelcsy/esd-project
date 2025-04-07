@@ -219,39 +219,8 @@ function getItemType(item) {
     return 'event';
   }
   
-  console.log("Item not found in any array, using fallback detection");
-  
-  // Fallbacks based on item properties if array checks didn't work
-  if (item.cuisine) {
-    console.log(`Item has cuisine property (${item.cuisine}), assuming restaurant`);
-    return 'restaurant';
-  }
-  
-  if (item.date) {
-    console.log(`Item has date property (${item.date}), assuming event`);
-    return 'event';
-  }
-  
-  if (item.suggested_day) {
-    console.log(`Item has suggested_day property (${item.suggested_day})`);
-    // Most attractions have suggested days, but so do some activities
-    // If it has a specific description pattern, it might be an attraction
-    if (item.description && (
-        item.description.toLowerCase().includes('monument') || 
-        item.description.toLowerCase().includes('museum') || 
-        item.description.toLowerCase().includes('tower') ||
-        item.description.toLowerCase().includes('landmark') ||
-        item.description.toLowerCase().includes('cathedral') ||
-        item.description.toLowerCase().includes('palace')
-      )) {
-      console.log(`Item description contains attraction keywords, assuming attraction`);
-      return 'attraction';
-    }
-    console.log(`Item has suggested_day but no attraction keywords, assuming activity`);
-    return 'activity';
-  }
-  
-  console.log("Using default fallback: activity");
+  // If we can't determine the type, default to 'activity'
+  console.log(`Could not determine type for "${item.name}", defaulting to activity`);
   return 'activity';
 }
 

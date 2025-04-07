@@ -1,6 +1,11 @@
 from flask import request, jsonify, session
 from app.models import db, Calendar, UserAvailability
 from datetime import datetime
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def register_routes(app):
     @app.route('/api/calendars', methods=['POST'])
@@ -40,9 +45,11 @@ def register_routes(app):
             
             return jsonify(calendar.to_dict()), 201
             
-        except ValueError:
+        except ValueError as e:
+            logger.error(f"Invalid date format: {e}")
             return jsonify({'error': 'Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS)'}), 400
         except Exception as e:
+            logger.error(f"Error creating calendar: {e}")
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
@@ -58,19 +65,36 @@ def register_routes(app):
     @app.route('/api/calendars/group/<int:group_id>', methods=['GET'])
     def get_group_calendar(group_id):
         """Get calendar and all user availabilities for a specific group"""
-        calendar = Calendar.query.filter_by(group_id=group_id).first()
-        if not calendar:
-            return jsonify({'error': 'Calendar not found'}), 404
+        try:
+            logger.info(f"Fetching calendar for group {group_id}")
+            calendar = Calendar.query.filter_by(group_id=group_id).first()
+            
+            # If no calendar exists, create one with default date range
+            if not calendar:
+                logger.info(f"No calendar found for group {group_id}, creating default calendar")
+                today = datetime.utcnow()
+                calendar = Calendar(
+                    group_id=group_id,
+                    start_date_range=today,
+                    end_date_range=today.replace(month=today.month + 1)
+                )
+                db.session.add(calendar)
+                db.session.commit()
 
-        # Get all user availabilities for this calendar
-        availabilities = UserAvailability.query.filter_by(calendar_id=calendar.id).all()
-        
-        response = {
-            **calendar.to_dict(),
-            'user_availabilities': [avail.to_dict() for avail in availabilities]
-        }
-        
-        return jsonify(response), 200
+            # Get all user availabilities for this calendar
+            availabilities = UserAvailability.query.filter_by(calendar_id=calendar.id).all()
+            
+            response = {
+                **calendar.to_dict(),
+                'user_availabilities': [avail.to_dict() for avail in availabilities]
+            }
+            
+            logger.info(f"Successfully retrieved calendar for group {group_id}")
+            return jsonify(response), 200
+
+        except Exception as e:
+            logger.error(f"Error fetching calendar for group {group_id}: {e}")
+            return jsonify({'error': f'Error fetching calendar: {str(e)}'}), 500
 
     @app.route('/api/calendars/group/<int:group_id>', methods=['DELETE'])
     def delete_group_calendar(group_id):
