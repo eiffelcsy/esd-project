@@ -165,35 +165,6 @@ def register_routes(app):
             logger.error(traceback.format_exc())
             return jsonify({"error": "Failed to add activity"}), 500
 
-    @app.route('/api/recommendations', methods=['POST'])
-    def get_recommendations():
-        """Request recommendations from recommendation service via message broker."""
-        trip_data = request.json
-        
-        # Validate required fields
-        required_fields = ['trip_id', 'destination', 'start_date', 'end_date']
-        if not all(field in trip_data for field in required_fields):
-            return jsonify({"error": "Missing required fields"}), 400
-            
-        try:
-            # Get the message broker instance
-            from app import message_broker
-            
-            # Send recommendation request
-            message_broker.send_recommendation_request(
-                trip_id=trip_data['trip_id'],
-                destination=trip_data['destination'],
-                start_date=trip_data['start_date'],
-                end_date=trip_data['end_date']
-            )
-            
-            logger.info(f"Sent recommendation request via message broker for trip_id: {trip_data['trip_id']}")
-            return jsonify({"message": "Recommendation request sent. Results will be available asynchronously."}), 202
-        except Exception as e:
-            logger.error(f"Error requesting recommendations: {str(e)}")
-            logger.error(traceback.format_exc())
-            return jsonify({"error": f"Failed to request recommendations: {str(e)}"}), 500
-
     @app.route('/api/recommendations/<trip_id>', methods=['GET'])
     def retrieve_recommendations(trip_id):
         """Retrieve recommendations for a specific trip from database."""
@@ -424,52 +395,3 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error adding recommendations for trip_id {trip_id}: {str(e)}")
             return jsonify({"error": f"Failed to add recommendations: {str(e)}"}), 500
-
-    # Testing endpoint to verify RabbitMQ
-    @app.route('/api/test/rabbitmq', methods=['GET'])
-    def test_rabbitmq():
-        """Test RabbitMQ connection and queues."""
-        try:
-            from app import message_broker
-            
-            # Test connection
-            if message_broker.connection is None or message_broker.connection.is_closed:
-                connected = message_broker.connect()
-                if not connected:
-                    return jsonify({
-                        "status": "error",
-                        "message": "Failed to connect to RabbitMQ"
-                    }), 500
-            
-            # Test send a message to recommendation_requests queue
-            test_message = {
-                "trip_id": "test-" + datetime.now().isoformat(),
-                "destination": "Test Destination",
-                "start_date": datetime.now().date().isoformat(),
-                "end_date": datetime.now().date().isoformat()
-            }
-            
-            message_sent = message_broker.publish_message(
-                message_broker.recommendation_requests_queue,
-                test_message
-            )
-            
-            if message_sent:
-                return jsonify({
-                    "status": "success",
-                    "message": "Successfully connected to RabbitMQ and sent test message",
-                    "test_message": test_message
-                }), 200
-            else:
-                return jsonify({
-                    "status": "error",
-                    "message": "Connected to RabbitMQ but failed to send test message"
-                }), 500
-                
-        except Exception as e:
-            logger.error(f"Error testing RabbitMQ: {str(e)}")
-            logger.error(traceback.format_exc())
-            return jsonify({
-                "status": "error",
-                "message": f"Failed to test RabbitMQ: {str(e)}"
-            }), 500 

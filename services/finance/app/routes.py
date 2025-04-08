@@ -392,25 +392,6 @@ def register_routes(app):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
         
-    # Add route to update user payment status for a given trip once all users have paid
-    @app.route('/api/finance/update/<trip_id>', methods=['PUT'])
-    def update_payment_status(trip_id):
-        try:
-            # Get user ID from request body or query parameter
-            data = request.get_json() or {}
-            user_id = data.get('user_id') or request.args.get('user_id')
-            
-            if not user_id:
-                return jsonify({
-                    'error': 'Missing user_id parameter. Please provide a user_id in the request body or as a query parameter.'
-                }), 400
-            
-            # Update user readiness status by calling the dedicated endpoint
-            return update_readiness_status(trip_id, user_id)
-            
-        except Exception as e:
-            return jsonify({'error': str(e)}), 400
-        
     # Get all users and their readiness status for a trip
     @app.route('/api/finance/readiness/<trip_id>', methods=['GET'])
     def get_readiness_status(trip_id):

@@ -296,38 +296,6 @@ def register_routes(app):
         else:
             return jsonify(response), 400
 
-    @app.route('/api/groups/cleanup/null-group-id', methods=['DELETE'])
-    def delete_null_group_id_requests():
-        """Cleanup endpoint to remove requests that have null group_id (failed creations)"""
-        try:
-            null_requests = GroupRequest.query.filter(GroupRequest.group_id.is_(None)).all()
-            count = len(null_requests)
-            
-            for req in null_requests:
-                db.session.delete(req)
-            
-            db.session.commit()
-            return jsonify({'message': f'Successfully deleted {count} requests with null group_id'}), 200
-            
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'error': f'Error during cleanup: {str(e)}'}), 500
-
-    @app.route('/api/groups/cleanup/all', methods=['DELETE'])
-    def delete_all_requests():
-        """Cleanup endpoint to remove all group requests - ONLY FOR TESTING"""
-        if os.getenv('FLASK_ENV') != 'development':
-            return jsonify({'error': 'This endpoint is only available in development mode'}), 403
-            
-        try:
-            deleted = db.session.query(GroupRequest).delete()
-            db.session.commit()
-            return jsonify({'message': f'Successfully deleted all {deleted} group requests'}), 200
-            
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'error': f'Error during cleanup: {str(e)}'}), 500
-
     # Get invited groups (groups that a user is invited to but hasn't joined yet)
     @app.route('/api/groups/invited/<int:user_id>', methods=['GET'])
     def get_invited_groups(user_id):

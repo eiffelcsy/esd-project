@@ -53,15 +53,6 @@ def register_routes(app):
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/calendars', methods=['GET'])
-    def get_all_calendars():
-        """Get all calendars (temporary route)"""
-        try:
-            calendars = Calendar.query.all()
-            return jsonify([calendar.to_dict() for calendar in calendars]), 200
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
     @app.route('/api/calendars/group/<int:group_id>', methods=['GET'])
     def get_group_calendar(group_id):
         """Get calendar and all user availabilities for a specific group"""

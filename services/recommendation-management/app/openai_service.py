@@ -18,17 +18,17 @@ def get_env_var(key, default=None):
 def get_openai_client():
     """Initialize and return an OpenAI client, or None if initialization fails"""
     try:
-        api_key = get_env_var('OPENAI_API_KEY')
+        api_key = get_env_var('GEMINI_API_KEY')
         if not api_key:
-            logger.error("OPENAI_API_KEY is empty or not set")
+            logger.error("GEMINI_API_KEY is empty or not set")
             return None
         
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
         logger.info("Successfully initialized OpenAI client")
         return client
     except Exception as e:
         logger.error(f"Error initializing OpenAI client: {e}")
-        logger.error("Please ensure OPENAI_API_KEY is properly set in your environment")
+        logger.error("Please ensure GEMINI_API_KEY is properly set in your environment")
         return None
 
 def get_recommendations(destination, start_date, end_date):
@@ -47,13 +47,14 @@ def get_recommendations(destination, start_date, end_date):
         # Call OpenAI API
         logger.info("Sending request to OpenAI API")
         response = client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            # model="gpt-4-turbo-preview",
+            model="gemini-2.0-flash",
             messages=[
                 {"role": "system", "content": "You are a helpful travel assistant that provides detailed recommendations only in JSON format, without any other text."},
                 {"role": "user", "content": create_prompt(destination, start_date, end_date, trip_duration)}
             ],
-            temperature=0.7,
-            max_tokens=800
+            # temperature=0.7,
+            # max_tokens=800
         )
         
         # Extract and parse the response
