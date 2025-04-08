@@ -20,21 +20,6 @@ Returns the service health status.
 }
 ```
 
-### Root Endpoint
-
-```
-GET /
-```
-
-Service information endpoint.
-
-**Response:**
-```json
-{
-  "message": "Finance Service API. Use /health for health check."
-}
-```
-
 ### Get Currency Exchange Rates
 
 ```
@@ -219,30 +204,6 @@ Adds a new expense to a trip.
   "trip_id": "123",
   "amount": 50.75,
   "currency": "EUR"
-}
-```
-
-### Update Payment Status
-
-```
-PUT /api/finance/update/{trip_id}
-```
-
-Updates the payment status of expenses in a trip.
-
-**Request:**
-```json
-{
-  "expense_ids": [1, 2],
-  "is_paid": true
-}
-```
-
-**Response:**
-```json
-{
-  "message": "Payment status updated for 2 expenses",
-  "updated_ids": [1, 2]
 }
 ```
 

@@ -48,34 +48,6 @@ Creates a new calendar for a group.
 }
 ```
 
-### Get All Calendars
-
-```
-GET /api/calendars
-```
-
-Retrieves all calendars.
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "group_id": 1,
-    "start_date_range": "2023-07-01T00:00:00",
-    "end_date_range": "2023-07-15T00:00:00",
-    "created_at": "2023-06-15T12:30:45"
-  },
-  {
-    "id": 2,
-    "group_id": 2,
-    "start_date_range": "2023-08-10T00:00:00",
-    "end_date_range": "2023-08-20T00:00:00",
-    "created_at": "2023-06-16T09:15:30"
-  }
-]
-```
-
 ### Get Group Calendar
 
 ```

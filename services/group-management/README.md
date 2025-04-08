@@ -120,7 +120,7 @@ Retrieves details about a specific group.
 ### Get User Groups
 
 ```
-GET /api/users/{user_id}/groups
+GET /api/groups/user/{user_id}
 ```
 
 Retrieves all groups a user is a member of.
@@ -149,46 +149,6 @@ Retrieves all groups a user is a member of.
 }
 ```
 
-### Invite User to Group
-
-```
-POST /api/groups/{group_id}/invite
-```
-
-Invites a user to join a group.
-
-**Request:**
-```json
-{
-  "user_id": 5
-}
-```
-
-**Response:**
-```json
-{
-  "message": "User 5 invited to group 1",
-  "group_id": 1,
-  "invited_user": 5
-}
-```
-
-### Remove User from Group
-
-```
-DELETE /api/groups/{group_id}/users/{user_id}
-```
-
-Removes a user from a group.
-
-**Response:**
-```json
-{
-  "message": "User 2 removed from group 1",
-  "group_id": 1,
-  "user_id": 2
-}
-```
 
 ### Delete Group
 

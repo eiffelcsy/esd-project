@@ -10,10 +10,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def register_routes(app):
-    # Routes to check health
-    @app.route('/', methods=['GET'])
-    def root():
-        return jsonify({"message": "Finance Service API. Use /health for health check."}), 200
 
     # Gets conversion rates for local currency
     @app.route('/api/finance/rates', methods=['GET'])

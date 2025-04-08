@@ -21,21 +21,6 @@ Returns the service health status.
 }
 ```
 
-### Root Endpoint
-
-```
-GET /
-```
-
-Service information endpoint.
-
-**Response:**
-```json
-{
-  "message": "Itinerary Service API. Use /health for health check."
-}
-```
-
 ### Get Itinerary
 
 ```
@@ -276,26 +261,6 @@ Adds a set of recommendations to an itinerary.
 ```json
 {
   "message": "Recommendations added successfully"
-}
-```
-
-### Test RabbitMQ Connectivity
-
-```
-GET /api/test/rabbitmq
-```
-
-Tests RabbitMQ connection and messaging capabilities.
-
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "RabbitMQ connection test successful",
-  "details": {
-    "connected": true,
-    "queues_declared": ["recommendation_requests", "recommendation_responses"]
-  }
 }
 ```
 
